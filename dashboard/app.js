@@ -35,6 +35,7 @@
     });
     state.data = { ...payload, applications };
     $("error").hidden = true;
+    window.QuestionInbox?.render(state.data);
     render();
   }
   function render() {
@@ -68,7 +69,7 @@
   }
   function logEntry(entry) {
     const app = entry.app, resume = entry.resume;
-    const item = el("li", null, "run-entry"); item.dataset.applicationId = app.id;
+    const item = el("li", null, "run-entry"); item.dataset.applicationId = app.id; item.id = "app-" + app.id;
     item.append(el("time", validDate(entry.at) ? timeFormat.format(new Date(entry.at)) : "--:--", "entry-time"));
     const body = el("div", null, "entry-body");
     const heading = el("div", null, "entry-heading");

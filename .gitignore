@@ -9,6 +9,7 @@
 !/README.md
 !/dashboard/app.js
 !/dashboard/index.html
+!/dashboard/questions.js
 !/dashboard/runs.js
 !/dashboard/style.css
 !/docs/verification.md
@@ -20,6 +21,7 @@
 !/scripts/export_dashboard.py
 !/scripts/import_pdf.py
 !/scripts/publication.py
+!/scripts/questions.py
 !/scripts/resolve_resume.py
 !/scripts/setup_workspace.py
 !/scripts/submission.py
@@ -30,6 +32,7 @@
 !/tests/test_context.py
 !/tests/test_dashboard.py
 !/tests/test_publication.py
+!/tests/test_questions.py
 !/tests/test_setup.py
 !/tests/test_submission.py
 !/tests/test_workflow.py
