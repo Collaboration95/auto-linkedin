@@ -28,6 +28,7 @@
 !/scripts/export_dashboard.py
 !/scripts/forms.py
 !/scripts/import_pdf.py
+!/scripts/metrics.py
 !/scripts/publication.py
 !/scripts/questions.py
 !/scripts/queue_state.py
@@ -49,6 +50,7 @@
 !/tests/test_dashboard.py
 !/tests/test_eligibility.py
 !/tests/test_forms.py
+!/tests/test_metrics.py
 !/tests/test_publication.py
 !/tests/test_questions.py
 !/tests/test_queue.py
