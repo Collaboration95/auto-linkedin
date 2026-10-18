@@ -270,8 +270,8 @@ def capture(root, data, now):
               "job_description_sha256": digest(directory / "job-description.txt"),
               "events": [{"at": now.isoformat(), "status": "discovered"}], "submissions": []}
     atomic_json(directory / "record.json", record)
-    export_csv(root)
-    return {"application_id": application_id, "record": str(directory / "record.json"), "duplicate": False}
+    exported = refresh_export(root)
+    return {"application_id": application_id, "record": str(directory / "record.json"), "duplicate": False, "mutation": "persisted", "export": exported}
 
 
 def event(root, args, now):
@@ -310,24 +310,8 @@ def event(root, args, now):
                               "answers_path": str((attempt / "answers.json").relative_to(root)),
                               "answers_sha256": digest(attempt / "answers.json"),
                               "context_version": run_context(root)["version"]}
-    if status in {"submitted", "submission_uncertain"}:
-        prepared = record.get("prepared")
-        if not prepared:
-            raise ValueError("Prepare and snapshot the exact resume/answers before submission")
-        if status == "submitted":
-            if not args.evidence or not args.evidence.is_file():
-                raise ValueError("Submitted status requires a saved confirmation evidence file")
-            # Confirmed historical submissions must still be logged after a deadline
-            # or replacement; the saved ID/hash records what was actually prepared.
-            try:
-                preflight(root, {**record, "status": "ready"}, now)
-            except (ValueError, OSError) as exc:
-                details["recording_warning"] = str(exc)
-            evidence = directory / ("confirmation-" + now.strftime("%Y%m%dT%H%M%S%f") + args.evidence.suffix)
-            shutil.copy2(args.evidence, evidence)
-            details.update(confirmation_path=str(evidence.relative_to(root)), confirmation_sha256=digest(evidence))
-            record["submissions"].append({**prepared, "submitted_at": now.isoformat(), **details})
-            record["submitted_at"] = now.isoformat()
+    if status == "submission_uncertain" and not record.get("prepared"):
+        raise ValueError("Prepare and snapshot exact resume/answers before uncertainty")
     if record["status"] == "submission_uncertain" and status != "submitted":
         evidence = directory / ("reconciliation-" + now.strftime("%Y%m%dT%H%M%S%f") + args.evidence.suffix)
         shutil.copy2(args.evidence, evidence)
@@ -335,11 +319,12 @@ def event(root, args, now):
     record["events"].append(details)
     record.update(status=status, status_updated_at=now.isoformat())
     atomic_json(directory / "record.json", record)
-    export_csv(root)
-    return {"application_id": args.id, "status": status}
+    exported = refresh_export(root)
+    return {"application_id": args.id, "status": status, "mutation": "persisted", "export": exported}
 
 
 def export_csv(root):
+    snapshot = records(root)
     fields = ["application_id", "company", "role", "location", "platform", "platform_job_id",
               "employer_requisition_id", "listing_url", "application_url", "captured_at", "status",
               "status_updated_at", "resume_id", "source_master_id", "resume_sha256", "record_path",
@@ -351,7 +336,7 @@ def export_csv(root):
         with os.fdopen(fd, "w", newline="") as stream:
             output = csv.DictWriter(stream, fieldnames=fields)
             output.writeheader()
-            for record in records(root):
+            for record in snapshot:
                 saved = record["submissions"][-1] if record["submissions"] else record.get("prepared", {})
                 row = {key: record.get(key, "") for key in fields}
                 row.update(resume_id=saved.get("id", ""), source_master_id=saved.get("source_master_id", ""),
@@ -362,8 +347,22 @@ def export_csv(root):
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
-    dashboard = export_dashboard(root)
-    return {"path": str(target), "records": len(records(root)), "dashboard": dashboard["path"]}
+    dashboard = export_dashboard(root, snapshot)
+    return {"path": str(target), "records": len(snapshot), "dashboard": dashboard["path"]}
+
+
+
+def refresh_export(root, defer=None):
+    """A view failure cannot undo or disguise successful authoritative mutation."""
+    if defer is None:defer=configuration(root).get('defer_export',False)
+    if defer:
+        state={'status':'deferred','dirty':True}
+    else:
+        try:state={'status':'exported','dirty':False,**export_csv(root)}
+        except (OSError,ValueError,KeyError,TypeError):state={'status':'failed','dirty':True,'reason':'export_failed_retry_export'}
+    try:atomic_json(root/'runtime/export-state.json',state)
+    except OSError:pass
+    return state
 
 
 def main():
@@ -418,7 +417,7 @@ def main():
         if args.command == "import-answers":
             from answer_import import import_changes
             result = import_changes(ROOT, read(args.file), now)
-            result["export"] = export_csv(ROOT)
+            result["export"] = refresh_export(ROOT)
             print(json.dumps(result, indent=2))
             return
         with writer(ROOT):
@@ -459,7 +458,7 @@ def main():
             elif args.command == "preflight":
                 result = preflight(ROOT, read(ROOT / "applications/records" / slug(args.id) / "record.json"), now)
             else:
-                result = export_csv(ROOT)
+                result = refresh_export(ROOT, defer=False)
         print(json.dumps(result, indent=2, ensure_ascii=False))
     except (ValueError, KeyError, OSError, TypeError, subprocess.CalledProcessError, zipfile.BadZipFile) as exc:
         parser.exit(1, f"ERROR: {exc}\n")

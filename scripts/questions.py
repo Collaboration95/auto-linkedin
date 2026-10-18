@@ -37,10 +37,10 @@ def register(root,application_id,form_key,field_key,spec,canonical_id=None):
         w.atomic_json(root/'questions.json',data);return {'question_id':qid,'occurrence_id':oid}
 
 
-def inbox(root,now):
+def inbox(root,now,answer_data=None):
     from answers import resolve_question
     data=store(root);result=[]
     for q in data['questions']:
-        resolved=resolve_question(root,q,now);answer=resolved['answer']
+        resolved=resolve_question(root,q,now,answer_data);answer=resolved['answer']
         result.append({**q,'question_version':content_version(signature(q)),'status':resolved['status'],'reason':resolved['reason'],'saved_value':answer['value'] if answer else None,'resolved_answer_id':answer['id'] if answer else None,'occurrences':[o for o in data['occurrences'] if o['question_id']==q['id']]})
     return sorted(result,key=lambda q:(q['status']=='resolved',q['id']))

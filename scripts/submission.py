@@ -53,6 +53,7 @@ def begin_submit(root,identity,observed_url,claim,now,batch_id='manual',category
         r.update(intent=intent,status='submission_uncertain',status_updated_at=now.isoformat())
         r.setdefault('events',[]).append({'at':now.isoformat(),'status':'submission_uncertain','reason':'submit_intent'})
         save(root,r)
+        w.refresh_export(root)
         return intent.copy()
 
 
@@ -62,7 +63,7 @@ def confirm(root,identity,attempt_id,evidence,now,occurred_at=None):
     with w.writer(root):
         r=load(root,identity);intent=r.get('intent',{})
         if intent.get('attempt_id')!=attempt_id:raise ValueError('attempt_mismatch')
-        if intent.get('state')=='confirmed':return {'confirmed':True,'duplicate':True}
+        if intent.get('state')=='confirmed':return {'confirmed':True,'duplicate':True,'export':w.refresh_export(root)}
         if intent.get('state')!='begun' or not evidence.is_file():raise ValueError('confirmation_evidence_required')
         directory=root/'applications/records'/identity/'submissions'/attempt_id
         directory.mkdir(parents=True,exist_ok=True);target=directory/'confirmation.txt';shutil.copyfile(evidence,target)
@@ -72,7 +73,7 @@ def confirm(root,identity,attempt_id,evidence,now,occurred_at=None):
             if attempt['attempt_id']==attempt_id:attempt['state']='confirmed'
         r.update(status='submitted',submitted_at=occurred,status_updated_at=now.isoformat())
         r['events'].append({'at':occurred,'occurred_at':occurred,'recorded_at':now.isoformat(),'status':'submitted'})
-        save(root,r);return {'confirmed':True,'duplicate':False}
+        save(root,r);return {'confirmed':True,'duplicate':False,'mutation':'persisted','export':w.refresh_export(root)}
 
 
 def reconcile_not_submitted(root,identity,evidence,now):
