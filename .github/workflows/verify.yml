@@ -1,0 +1,24 @@
+name: Synthetic verification
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - run: python3 -m unittest discover -s tests -v
+      - run: node --test tests/run-grouping.test.cjs
+      - run: python3 scripts/smoke.py
+      - run: python3 scripts/publication.py --history
+      - run: python3 scripts/clean_smoke.py

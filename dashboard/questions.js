@@ -10,7 +10,7 @@
     list.replaceChildren();
     for (const q of data.questions || []) {
       const card = node('article'); card.className = 'question-card'; card.id = q.id;
-      card.append(node('h3', q.text), node('p', q.status === 'resolved' ? 'Persisted answer' : 'Needs an answer'));
+      card.append(node('h3', q.text), node('p', q.status === 'archived' ? 'Archived question from a prior form version' : q.status === 'resolved' ? 'Persisted answer' : 'Needs an answer'));
       if (q.options?.length) card.append(node('p', `Options: ${q.options.join(' · ')}`));
       card.append(node('p', `${q.unlock_count || 0} application(s) unlock when this answer is resolved.`));
       const label = node('label', 'Reviewed answer'); label.className = 'answer-editor';
@@ -19,6 +19,7 @@
         input = node('select'); const empty = node('option', 'Choose an answer'); empty.value = ''; input.append(empty);
         for (const value of q.field_type === 'boolean' ? [true, false] : q.options || []) { const opt = node('option', String(value)); opt.value = String(value); input.append(opt); }
       } else { input = node('input'); input.type = q.field_type === 'number' ? 'number' : 'text'; if (input.type === 'number') input.step = 'any'; }
+      input.disabled = q.status === 'archived';
       input.value = q.saved_value == null ? '' : String(q.saved_value); input.setAttribute('aria-label', q.text);
       label.append(input); card.append(label);
       const scope = node('p', `Scope: ${Object.entries(q.scope || {}).map(([k,v]) => `${k}: ${v}`).join(' · ') || 'General'}${q.units ? ' · ' + q.units : ''}. Review valid for 30 days.`); card.append(scope);
@@ -42,13 +43,13 @@
     }
     if (!list.children.length) list.append(node('p', 'No questions yet.'));
     const attention = document.getElementById('attention-items'); attention.replaceChildren();
-    const unresolved = (data.questions || []).filter(q => q.status !== 'resolved').length;
+    const unresolved = (data.questions || []).filter(q => q.status === 'unresolved').length;
     const review = node('button', `${unresolved} unresolved question(s)`); review.type = 'button'; review.addEventListener('click', () => select('questions-panel')); attention.append(review);
     for (const id of data.attention?.uncertain || []) {
       const app = data.applications.find(a => a.id === id), a = node('a', `Check uncertain submission: ${app?.company || id}`); a.href = '#app-' + id; a.addEventListener('click', () => select('history-panel')); attention.append(a);
     }
     for (const fact of data.attention?.outdated_facts || []) attention.append(node('p', `Outdated fact requires review: ${fact.answer_id}`));
-    document.getElementById('question-count').textContent = (data.questions || []).filter(q => q.status !== 'resolved').length;
+    document.getElementById('question-count').textContent = (data.questions || []).filter(q => q.status === 'unresolved').length;
   }
   function select(id) {
     for (const b of document.querySelectorAll('[data-panel]')) {

@@ -30,10 +30,15 @@ def register(root,application_id,form_key,field_key,spec,canonical_id=None):
         if matches and signature(matches[0],False)!=signature(spec,False):raise ValueError('incompatible_canonical_mapping')
         if not matches:data['questions'].append({**copy.deepcopy(spec),'id':qid,'answer_id':None})
         oid='o-'+content_version([application_id,form_key,field_key])[:24]
-        old=next((o for o in data['occurrences'] if o['id']==oid),None)
-        occurrence={'id':oid,'question_id':qid,'application_id':application_id,'form_key':form_key,'field_key':field_key,'text':spec['text'],'options':spec.get('options',[]),'company':record['company'],'listing_url':record['canonical_listing_url'],'record_url':'../applications/records/'+application_id+'/record.json'}
-        if old and (old['question_id']!=qid or old['text']!=spec['text'] or old['options']!=spec.get('options',[])):raise ValueError('page_changed')
-        if not old:data['occurrences'].append(occurrence)
+        old=next((o for o in data['occurrences'] if o['application_id']==application_id and o['form_key']==form_key and o['field_key']==field_key and o.get('active',True)),None)
+        changed=old and (old['question_id']!=qid or old['text']!=spec['text'] or old['options']!=spec.get('options',[]))
+        if changed:
+            if not record.get('reviewed_form_change'):raise ValueError('page_changed')
+            oid='o-'+content_version([application_id,form_key,field_key,qid,spec['text'],spec.get('options',[])])[:24]
+            old.update(active=False,superseded_by=oid)
+        elif old:oid=old['id']
+        occurrence={'id':oid,'question_id':qid,'application_id':application_id,'form_key':form_key,'field_key':field_key,'text':spec['text'],'options':spec.get('options',[]),'company':record['company'],'listing_url':record['canonical_listing_url'],'record_url':'../applications/records/'+application_id+'/record.json','active':True}
+        if not old or changed:data['occurrences'].append(occurrence)
         w.atomic_json(root/'questions.json',data);return {'question_id':qid,'occurrence_id':oid}
 
 
@@ -42,5 +47,7 @@ def inbox(root,now,answer_data=None):
     data=store(root);result=[]
     for q in data['questions']:
         resolved=resolve_question(root,q,now,answer_data);answer=resolved['answer']
-        result.append({**q,'question_version':content_version(signature(q)),'status':resolved['status'],'reason':resolved['reason'],'saved_value':answer['value'] if answer else None,'resolved_answer_id':answer['id'] if answer else None,'occurrences':[o for o in data['occurrences'] if o['question_id']==q['id']]})
+        occurrences=[o for o in data['occurrences'] if o['question_id']==q['id']]
+        if occurrences and not any(o.get('active',True) for o in occurrences):resolved['status']='archived'
+        result.append({**q,'question_version':content_version(signature(q)),'status':resolved['status'],'reason':resolved['reason'],'saved_value':answer['value'] if answer else None,'resolved_answer_id':answer['id'] if answer else None,'occurrences':occurrences})
     return sorted(result,key=lambda q:(q['status']=='resolved',q['id']))
