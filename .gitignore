@@ -2,6 +2,7 @@
 *
 !/dashboard/
 !/docs/
+!/fixtures/
 !/scripts/
 !/tests/
 !/.gitignore
@@ -13,6 +14,8 @@
 !/dashboard/runs.js
 !/dashboard/style.css
 !/docs/verification.md
+!/fixtures/form-adapter.js
+!/fixtures/form.html
 !/master-plan.md
 !/publication.json
 !/scripts/answer_import.py
@@ -22,6 +25,7 @@
 !/scripts/context.py
 !/scripts/eligibility.py
 !/scripts/export_dashboard.py
+!/scripts/forms.py
 !/scripts/import_pdf.py
 !/scripts/publication.py
 !/scripts/questions.py
@@ -42,6 +46,7 @@
 !/tests/test_context.py
 !/tests/test_dashboard.py
 !/tests/test_eligibility.py
+!/tests/test_forms.py
 !/tests/test_publication.py
 !/tests/test_questions.py
 !/tests/test_queue.py

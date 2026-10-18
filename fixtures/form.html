@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic application form</title>
+<style>body{font:16px system-ui;max-width:660px;margin:40px auto;padding:20px}label{display:grid;gap:8px;margin:20px 0}input,select,button{font:inherit;padding:10px;max-width:100%}output{display:block;margin-top:20px;overflow-wrap:anywhere}</style>
+<h1>Local synthetic form smoke</h1><p>No employer is contacted. This page has no submission control.</p>
+<form id="application" data-job-url="https://example.org/jobs/local" onsubmit="return false">
+<label for="name">Application name</label><input id="name" type="text">
+<label for="schedule">Preferred schedule</label><select id="schedule"><option value="Day">Day</option><option value="Night">Night</option></select>
+<label for="resume">Selected resume</label><input id="resume" type="file" accept=".pdf">
+<p>Current work history: <span data-history>Fictional Systems · Engineer</span></p></form>
+<button id="run" type="button">Run text/select/upload smoke</button><button id="changed" type="button">Test changed layout fallback</button><output id="result" role="status">Ready</output>
+<script src="form-adapter.js"></script><script>
+window.runSyntheticFormSmoke = async function(changed = false) {
+ const root = document.getElementById('application');
+ const file = new File(['%PDF-1.4\n% Synthetic local upload fixture\n%%EOF\n'], 'synthetic-resume.pdf', { type: 'application/pdf' });
+ const plan = { jobUrl: root.dataset.jobUrl, history: 'Fictional Systems · Engineer', fields: [
+  { label: 'Application name', type: 'text', value: 'Fictional Candidate' },
+  { label: 'Preferred schedule', type: 'select', options: ['Day', 'Night'], value: 'Night' },
+  { label: 'Selected resume', type: 'upload', file, sha256: await LocalForm.hash(file) }
+ ] };
+ const option = new Option('Changed option', 'Changed'); if (changed) document.getElementById('schedule').add(option);
+ try { const result = await LocalForm.fill(root, plan); document.getElementById('result').textContent = 'passed: text/select/upload/history verified'; return result; }
+ catch(error) { document.getElementById('result').textContent = error.message; if (!changed || error.message !== 'page_changed') throw error; return { stopped: 'page_changed' }; }
+ finally { if (changed) option.remove(); }
+};
+document.getElementById('run').onclick = () => runSyntheticFormSmoke();
+document.getElementById('changed').onclick = () => runSyntheticFormSmoke(true);
+</script></html>

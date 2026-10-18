@@ -30,7 +30,13 @@ class SyntheticAdapter:
         job=next((j for j in self.catalog if j['listing_url']==context['listing_url']),None)
         if not job:raise AdapterError('page_changed')
         return {'observed_url':job['listing_url'],'listing_current':True,'requirements_verified':job.get('requirements_verified',False),'requirements':job.get('requirements',{}),'form':job.get('form',[]),'layout':'synthetic-v1'}
-    def prepare(self,context):self.calls.append('prepare');return {'verified':True,'observed_url':context['listing_url']}
+    def prepare(self,context):
+        self.calls.append('prepare')
+        from forms import fill_common,SyntheticFormDriver,FormError
+        fields=context['form']['form'];driver=SyntheticFormDriver(fields,context.get('history'))
+        try:verified=fill_common(driver,fields,context['answers'],context['resume'],context.get('history'))
+        except FormError as exc:raise AdapterError(exc.reason) from None
+        return {**verified,'observed_url':context['listing_url']}
     def observe(self,context):self.calls.append('observe');return {'observed_url':context['listing_url']}
     def submit(self,context):
         self.calls.append('submit')
@@ -126,7 +132,15 @@ def execute(root,batch,action,adapter,claim,now):
                 continue
             answer=resolved['answer'];items.append({'question':q['text'],'question_spec':q,'answer':answer['value'],'source_answer_id':answer['id']})
         if blocked:block_on_answers(root,identity,blocked,now);return
-        verified=adapter.prepare({**minimal,'form':r['workflow'],'answers':items,'resume':resume})
+        history=None
+        if any(f.get('field_type')=='history' for f in r['workflow']['form']):
+            from resolve_resume import timestamp
+            path=root/'profile/history.json'
+            if not path.is_file():raise AdapterError('outdated_fact')
+            facts=w.read(path)
+            if not facts.get('source',{}).get('id') or not facts.get('source',{}).get('version') or now>=timestamp(facts['review_due_at']):raise AdapterError('outdated_fact')
+            history=facts['entries']
+        verified=adapter.prepare({**minimal,'form':r['workflow'],'answers':items,'resume':resume,'history':history})
         if verified.get('verified') is not True or w.canonical_url(verified.get('observed_url',''))!=r['canonical_listing_url']:raise AdapterError('page_changed')
         target=root/'applications/records'/identity/'form-answers.json';w.atomic_json(target,items)
         with w.writer(root):w.event(root,argparse.Namespace(id=identity,status='ready',note='',resume_scope=resume['scope'],answers=target,evidence=None),now)
