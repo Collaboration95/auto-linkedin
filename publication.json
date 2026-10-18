@@ -24,6 +24,7 @@
     "scripts/queue_state.py",
     "scripts/resolve_resume.py",
     "scripts/setup_workspace.py",
+    "scripts/stops.py",
     "scripts/submission.py",
     "scripts/workspace.py",
     "tests/run-grouping.test.cjs",
@@ -39,7 +40,9 @@
     "tests/test_questions.py",
     "tests/test_queue.py",
     "tests/test_recovery.py",
+    "tests/test_relocation.py",
     "tests/test_setup.py",
+    "tests/test_stops.py",
     "tests/test_submission.py",
     "tests/test_workflow.py"
   ]
