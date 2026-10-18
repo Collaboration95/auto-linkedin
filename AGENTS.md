@@ -1,0 +1,1 @@
+Use synthetic data in tests, docs, logs and demos. Keep runtime state in an external private workspace. Preserve existing private files. Use the explicit publication manifest and scan before staging; never force-add. GitHub access uses the authenticated gh CLI. Do not perform live employer submissions during tests.

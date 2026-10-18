@@ -1,8 +1,25 @@
-# Bootstrap publication boundary: deny every path until privacy separation passes.
-# Do not force-add files. Expand this allowlist only for audited generic code.
-# Private profiles, resumes (including filenames), applications, sources, exports,
-# local instructions, screenshots, credentials and temporary files stay untracked.
+# Deny all paths; each public file requires individual review.
 *
+!/dashboard/
+!/docs/
+!/scripts/
+!/tests/
 !/.gitignore
+!/AGENTS.md
+!/README.md
+!/dashboard/app.js
+!/dashboard/index.html
+!/dashboard/runs.js
+!/dashboard/style.css
+!/docs/verification.md
 !/master-plan.md
-
+!/publication.json
+!/scripts/export_dashboard.py
+!/scripts/import_pdf.py
+!/scripts/publication.py
+!/scripts/resolve_resume.py
+!/scripts/workspace.py
+!/tests/run-grouping.test.cjs
+!/tests/test_dashboard.py
+!/tests/test_publication.py
+!/tests/test_workflow.py
