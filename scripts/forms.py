@@ -29,13 +29,17 @@ def fill_common(driver,expected,answers,resume,history=None):
         elif kind=='history':continue
         elif field.get('question_id') in selected:driver.fill(field,selected[field['question_id']])
         elif field.get('required',True):raise FormError('unknown_answer')
-    after=driver.snapshot()
+    return verify_common(driver.snapshot(),expected,answers,resume,history)
+
+
+def verify_common(after,expected,answers,resume,history=None):
     if layout_version(after['fields'])!=layout_version(expected):raise FormError('page_changed')
+    selected={a['question_spec']['id']:a['answer'] for a in answers}
     for field in expected:
         kind=field.get('field_type','text')
         if kind=='upload' and after.get('uploads',{}).get(field['key'])!=resume['sha256']:raise FormError('resume_stale')
         if kind not in {'upload','history'} and field.get('question_id') in selected and after.get('values',{}).get(field['key'])!=selected[field['question_id']]:raise FormError('page_changed')
-    if history is not None and after.get('history')!=history:raise FormError('outdated_fact')
+    if any(f.get('field_type')=='history' for f in expected) and (history is None or after.get('history')!=history):raise FormError('outdated_fact')
     return {'verified':True,'layout_version':layout_version(expected),'resume_sha256':resume['sha256']}
 
 class SyntheticFormDriver:
