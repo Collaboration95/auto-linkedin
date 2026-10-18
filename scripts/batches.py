@@ -20,3 +20,9 @@ def confirmed_totals(records,batch_id):
 def batch_progress(records,batch_id,quota):
     totals=confirmed_totals(records,batch_id)
     return {**totals,'remaining':max(0,quota-totals['confirmed']),'submitted_exclusions':sum(bool(r.get('submissions')) for r in records),'waiting_answers':sum(r['status']=='awaiting_answer' for r in records),'retryable':sum(r['status'] in {'discovered','preparing','ready','failed'} and not r.get('submissions') for r in records)}
+
+
+def submit_capacity(records,batch_id,quota):
+    totals=confirmed_totals(records,batch_id)
+    reserved={r['canonical_listing_url'] for r in records if not r.get('submissions') and r.get('intent',{}).get('state')=='begun' and r['intent'].get('batch_id')==batch_id}
+    return {**totals,'reserved':len(reserved),'remaining':max(0,quota-totals['confirmed']-len(reserved))}

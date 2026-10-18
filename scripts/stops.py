@@ -15,6 +15,7 @@ def record_stop(root,identity,reason,now,max_retries=3):
         r=load(root,identity);previous=r.get('stop',{})
         counts=previous.get('counts',{}).copy();counts[reason]=counts.get(reason,0)+1
         total=previous.get('retry_count',0)+(1 if reason in TRANSIENT else 0)
+        incoming_reason=reason
         uncertain=r['status']=='submission_uncertain' or r.get('intent',{}).get('state')=='begun'
         if uncertain:reason='uncertain_submit'
         exhausted=total>=max_retries if reason in TRANSIENT else False
@@ -23,7 +24,7 @@ def record_stop(root,identity,reason,now,max_retries=3):
         r['stop']=stop
         if not uncertain:r.update(status='awaiting_answer' if reason=='unknown_answer' else 'failed',status_updated_at=now.isoformat())
         save(root,r)
-        if reason in BROWSER_STOP:w.atomic_json(root/'runtime/browser-stop.json',{'reason':reason,'at':now.isoformat(),'requires_resume':True})
+        if incoming_reason in BROWSER_STOP:w.atomic_json(root/'runtime/browser-stop.json',{'reason':incoming_reason,'at':now.isoformat(),'requires_resume':True})
         return stop
 
 

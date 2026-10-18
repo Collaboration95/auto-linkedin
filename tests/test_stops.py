@@ -21,3 +21,10 @@ class StopTests(unittest.TestCase):
         with s.browser_claim(f.root) as claim:s.begin_submit(f.root,f.identity,f.f.record(f.identity)['canonical_listing_url'],claim,f.now)
         result=record_stop(f.root,f.identity,'timeout',f.now)
         self.assertEqual(result['reason'],'uncertain_submit');self.assertFalse(result['retryable']);self.assertEqual(s.load(f.root,f.identity)['status'],'submission_uncertain')
+
+    def test_login_or_page_change_during_submit_still_halts_browser(self):
+        f=self.f
+        with s.browser_claim(f.root) as claim:s.begin_submit(f.root,f.identity,f.f.record(f.identity)['canonical_listing_url'],claim,f.now)
+        for reason in ['login_required','page_changed']:
+            result=record_stop(f.root,f.identity,reason,f.now)
+            self.assertEqual(result['reason'],'uncertain_submit');self.assertEqual(browser_stopped(f.root)['reason'],reason)
