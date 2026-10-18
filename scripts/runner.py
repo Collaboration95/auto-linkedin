@@ -15,6 +15,7 @@ class AdapterError(Exception):
     def __init__(self,reason):self.reason=reason;super().__init__(reason)
 
 class UnsupportedAdapter:
+    def measured_usage(self):return None
     def discover(self):raise AdapterError('unsupported_live_capability')
     def inspect(self,context):raise AdapterError('unsupported_live_capability')
     def prepare(self,context):raise AdapterError('unsupported_live_capability')
@@ -24,6 +25,7 @@ class UnsupportedAdapter:
 class SyntheticAdapter:
     """Fictional catalog and confirmations; never opens or contacts an employer."""
     def __init__(self,catalog,failures=None):self.catalog=copy.deepcopy(catalog);self.failures=failures or {};self.calls=[]
+    def measured_usage(self):return None
     def discover(self):self.calls.append('discover');return copy.deepcopy(self.catalog)
     def inspect(self,context):
         self.calls.append('inspect')
@@ -49,7 +51,7 @@ def batch_path(root,batch_id):
     return root/'runtime/batches'/(w.slug(batch_id)+'.json')
 
 
-def initialize_batch(root,batch_id,quota):
+def initialize_batch(root,batch_id,quota,now=None,deadline=None):
     import workspace as w
     if type(quota) is not int or quota<0:raise ValueError('invalid_quota')
     path=batch_path(root,batch_id)
@@ -58,7 +60,8 @@ def initialize_batch(root,batch_id,quota):
             batch=w.read(path)
             if batch['quota']!=quota:raise ValueError('batch_quota_immutable_use_new_batch')
             return batch
-        batch={'batch_id':batch_id,'quota':quota,'discovery_done':False,'steps':0,'checkpoint':None}
+        from budgets import policy
+        batch={'budgets':policy(configuration(root),now or local_now(root),deadline),'retries':0,'batch_id':batch_id,'quota':quota,'discovery_done':False,'steps':0,'checkpoint':None}
         w.atomic_json(path,batch);return batch
 
 
@@ -156,22 +159,33 @@ def execute(root,batch,action,adapter,claim,now):
         submission.confirm(root,identity,intent['attempt_id'],evidence,now,confirmation.get('occurred_at'))
 
 
-def run(root,batch_id,adapter,quota=1,max_steps=10,clock=None):
+def run(root,batch_id,adapter,quota=1,max_steps=10,clock=None,deadline=None):
     import workspace as w
     if type(max_steps) is not int or max_steps<0:raise ValueError('invalid_step_budget')
-    clock=clock or (lambda:local_now(root));batch=initialize_batch(root,batch_id,quota);last={'action':'stop','reason':'step_budget'}
+    clock=clock or (lambda:local_now(root));batch=initialize_batch(root,batch_id,quota,clock(),deadline);last={'action':'stop','reason':'step_budget'}
     with submission.browser_claim(root) as claim:
         for _ in range(max_steps):
-            now=clock();recompute(root,now);last=next_action(root,batch,now)
+            now=clock()
+            from budgets import stop_reason
+            usage=adapter.measured_usage() if hasattr(adapter,'measured_usage') else None
+            budget_reason=stop_reason(batch,now,usage)
+            if budget_reason:last={'action':'stop','reason':budget_reason};break
+            recompute(root,now);last=next_action(root,batch,now)
             if last['action']=='stop':break
             batch['checkpoint']={**last,'phase':'started','at':now.isoformat()};w.atomic_json(batch_path(root,batch_id),batch)
             try:execute(root,batch,last,adapter,claim,now)
             except AdapterError as exc:
-                if last.get('application_id'):record_stop(root,last['application_id'],exc.reason,now)
+                if exc.reason in {'timeout','throttled'}:batch['retries']+=1
+                if last.get('application_id'):record_stop(root,last['application_id'],exc.reason,now,batch['budgets']['max_retries'])
                 else:
                     w.atomic_json(root/'runtime/browser-stop.json',{'reason':exc.reason,'at':now.isoformat(),'requires_resume':True})
                     last={'action':'stop','reason':exc.reason};break
+            except KeyboardInterrupt:
+                batch['checkpoint']={**last,'phase':'interrupted','at':clock().isoformat()};w.atomic_json(batch_path(root,batch_id),batch)
+                last={'action':'stop','reason':'interrupted'};break
             batch['steps']+=1;batch['checkpoint']={**last,'phase':'verified','at':now.isoformat()};w.atomic_json(batch_path(root,batch_id),batch)
         else:last={'action':'stop','reason':'step_budget'}
     capacity=submit_capacity(w.records(root),batch_id,quota)
-    return {'reason':last.get('reason','checkpoint'),'steps':batch['steps'],**capacity,'export':w.refresh_export(root)}
+    handoff={'reason':last.get('reason','checkpoint'),'steps':batch['steps'],**capacity,'provider_usage':adapter.measured_usage() if hasattr(adapter,'measured_usage') else None}
+    batch['handoff']=handoff;w.atomic_json(batch_path(root,batch_id),batch)
+    return {**handoff,'export':w.refresh_export(root)}

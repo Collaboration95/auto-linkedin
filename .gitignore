@@ -21,6 +21,7 @@
 !/scripts/answer_import.py
 !/scripts/answers.py
 !/scripts/batches.py
+!/scripts/budgets.py
 !/scripts/config.py
 !/scripts/context.py
 !/scripts/eligibility.py
@@ -42,6 +43,7 @@
 !/tests/test_answers.py
 !/tests/test_attention.py
 !/tests/test_batches.py
+!/tests/test_budgets.py
 !/tests/test_config.py
 !/tests/test_context.py
 !/tests/test_dashboard.py
