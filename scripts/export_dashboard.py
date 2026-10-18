@@ -48,9 +48,9 @@ def export_dashboard(root=ROOT):
             path = local_file(root, saved.get("exact_resume_copy"))
             return {"id": saved.get("id"), "file": path.name if path else None,
                     "url": "../" + path.relative_to(root).as_posix() if path else None}
-        events = [{"at": e.get("at"), "status": e.get("status"), "note": e.get("note", "")}
+        events = [{"at": e.get("occurred_at") or e.get("at"), "recorded_at": e.get("recorded_at"), "status": e.get("status"), "note": e.get("note", "")}
                   for e in record.get("events", [])]
-        submissions = [{"at": s.get("submitted_at"), "resume": resume(s),
+        submissions = [{"at": s.get("occurred_at") or s.get("submitted_at"), "recorded_at": s.get("recorded_at"), "resume": resume(s),
                         "applied_by": s.get("applied_by") or record.get("applied_by")}
                        for s in record.get("submissions", [])]
         prepared = record.get("prepared")

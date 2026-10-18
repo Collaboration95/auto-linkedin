@@ -288,7 +288,8 @@ def event(root, args, now):
         raise ValueError(f"Invalid transition {record['status']} -> {status}; reconcile before retrying")
     if record["status"] == "submission_uncertain" and status != "submitted" and (not args.evidence or not args.note):
         raise ValueError("Resolving uncertainty without submission requires reconciliation evidence and a note")
-    details = {"at": now.isoformat(), "status": status, "note": args.note}
+    occurred = timestamp(getattr(args, "occurred_at", None) or now.isoformat()).isoformat()
+    details = {"at": occurred, "occurred_at": occurred, "recorded_at": now.isoformat(), "status": status, "note": args.note}
     if status == "ready":
         if not args.resume_scope or not args.answers:
             raise ValueError("Ready requires --resume-scope and an exact questions/answers JSON file")
@@ -397,6 +398,7 @@ def main():
     update.add_argument("--id", required=True)
     update.add_argument("--status", choices=sorted(STATUSES - {"discovered"}), required=True)
     update.add_argument("--note", default="")
+    update.add_argument("--occurred-at")
     update.add_argument("--resume-scope")
     update.add_argument("--answers", type=Path)
     update.add_argument("--evidence", type=Path)
