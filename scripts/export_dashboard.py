@@ -3,6 +3,7 @@
 
 import json
 import os
+import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -67,6 +68,13 @@ def export_dashboard(root=ROOT):
     tz = configuration(root)["timezone"]
     generated_at = local_now(root).isoformat()
     payload = {"timezone": tz, "generated_at": generated_at, "applications": applications}
+    assets = Path(__file__).resolve().parents[1] / "dashboard"
+    (root / "dashboard").mkdir(parents=True, exist_ok=True)
+    for name in ("index.html", "app.js", "style.css", "runs.js"):
+        source = assets / name
+        destination = root / "dashboard" / name
+        if source.resolve() != destination.resolve():
+            shutil.copyfile(source, destination)
     directory = root / "dashboard/data"
     write_json(directory / "applications.json", payload)
     # Classic script works from file://; browsers commonly block fetch() of local JSON.
