@@ -24,6 +24,7 @@ class WorkflowTests(unittest.TestCase):
         self.application = self.add_release("backend-v1", "backend", "application", master="master-v1")
         self.registry = {"releases": [self.master, self.application]}
         self.save_registry()
+        w.atomic_json(self.root / "profile/answers.json", {"answers": [{"id":"sponsorship_required", "value":"Yes", "field_type":"text", "scope":{}, "source":{"id":"review-1","version":1,"kind":"user"}, "review_due_at":(self.now+timedelta(days=30)).isoformat()}]})
 
     def add_release(self, identity, scope, purpose, master=None, content="Fixture resume"):
         path = self.root / f"resumes/{identity}{'.md' if purpose == 'reference' else '.pdf'}"

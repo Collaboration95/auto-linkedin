@@ -16,7 +16,7 @@ import zipfile
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from config import select_workspace, configuration, local_now
+from config import select_workspace, configuration, local_now, private_path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from xml.etree import ElementTree
 
@@ -232,8 +232,13 @@ def preflight(root, record, now):
     current = resolve(read(root / "resumes/registry.json"), prepared["scope"], "application", now, root)
     if current["id"] != prepared["id"]:
         raise ValueError("Prepared resume has been replaced; prepare again")
-    if digest(root / prepared["exact_resume_copy"]) != prepared["sha256"] or digest(root / prepared["answers_path"]) != prepared["answers_sha256"]:
+    if digest(private_path(root, prepared["exact_resume_copy"])) != prepared["sha256"] or digest(private_path(root, prepared["answers_path"])) != prepared["answers_sha256"]:
         raise ValueError("Prepared submission snapshot was modified")
+    from answers import revalidate
+    from context import run_context
+    revalidate(root, read(private_path(root, prepared["answers_path"])), now)
+    if prepared.get("context_version") != run_context(root)["version"]:
+        raise ValueError("context_changed_after_preparation")
     return {"application_id": record["application_id"], "ready": True, "resume_id": current["id"]}
 
 
@@ -289,6 +294,9 @@ def event(root, args, now):
         answers = read(args.answers)
         if not isinstance(answers, list) or any(not isinstance(x, dict) or "question" not in x or "answer" not in x for x in answers):
             raise ValueError("Answers must be a JSON list with exact question and answer fields (an empty list is allowed)")
+        from answers import snapshot
+        from context import run_context
+        answers = snapshot(root, answers, record, now)
         attempt = directory / "submissions" / now.strftime("%Y%m%dT%H%M%S%f")
         attempt.mkdir(parents=True)
         target = attempt / Path(resume["path"]).name
@@ -297,7 +305,8 @@ def event(root, args, now):
         record["prepared"] = {**resume, "prepared_at": now.isoformat(),
                               "exact_resume_copy": str(target.relative_to(root)),
                               "answers_path": str((attempt / "answers.json").relative_to(root)),
-                              "answers_sha256": digest(attempt / "answers.json")}
+                              "answers_sha256": digest(attempt / "answers.json"),
+                              "context_version": run_context(root)["version"]}
     if status in {"submitted", "submission_uncertain"}:
         prepared = record.get("prepared")
         if not prepared:
