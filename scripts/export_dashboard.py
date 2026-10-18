@@ -6,10 +6,11 @@ import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from config import select_workspace, configuration, local_now
 from zoneinfo import ZoneInfo
 
-ROOT = Path(__import__("os").environ.get("AUTO_LINKEDIN_WORKSPACE", "~/.local/share/auto-linkedin")).expanduser().resolve()
-SGT = ZoneInfo("Asia/Singapore")
+ROOT = select_workspace()
+
 
 
 def write_json(path, value):
@@ -63,8 +64,9 @@ def export_dashboard(root=ROOT):
             "notes": record.get("notes", ""), "events": events, "submissions": submissions,
             "prepared": {"at": prepared.get("prepared_at"), "resume": resume(prepared)} if prepared else None})
     applications.sort(key=lambda app: app.get("updated_at") or "", reverse=True)
-    generated_at = datetime.now(SGT).isoformat()
-    payload = {"timezone": "Asia/Singapore", "generated_at": generated_at, "applications": applications}
+    tz = configuration(root)["timezone"]
+    generated_at = local_now(root).isoformat()
+    payload = {"timezone": tz, "generated_at": generated_at, "applications": applications}
     directory = root / "dashboard/data"
     write_json(directory / "applications.json", payload)
     # Classic script works from file://; browsers commonly block fetch() of local JSON.

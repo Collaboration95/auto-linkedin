@@ -16,6 +16,7 @@ import zipfile
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from config import select_workspace, configuration, local_now
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from xml.etree import ElementTree
 
@@ -348,6 +349,7 @@ def export_csv(root):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--workspace", type=Path)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("status")
     projects = commands.add_parser("projects")
@@ -380,7 +382,9 @@ def main():
     check.add_argument("--id", required=True)
     commands.add_parser("export")
     args = parser.parse_args()
-    now = datetime.now(timezone.utc).astimezone()
+    global ROOT
+    ROOT = select_workspace(args.workspace)
+    now = local_now(ROOT)
     try:
         with writer(ROOT):
             if args.command == "status":

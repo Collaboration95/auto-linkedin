@@ -9,8 +9,9 @@ import subprocess
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from config import select_workspace, configuration, local_now
 
-ROOT = Path(__import__("os").environ.get("AUTO_LINKEDIN_WORKSPACE", "~/.local/share/auto-linkedin")).expanduser().resolve()
+ROOT = select_workspace()
 
 
 def main():
@@ -20,7 +21,10 @@ def main():
     parser.add_argument("--destination", required=True, type=Path, help="Workspace-relative archive directory")
     parser.add_argument("--original-name")
     parser.add_argument("--content-updated-at", default=None, help="Only supply a verified content date")
+    parser.add_argument("--workspace", type=Path)
     args = parser.parse_args()
+    global ROOT
+    ROOT = select_workspace(args.workspace)
     import fitz  # PyMuPDF is needed only for PDF import, not routine workspace commands.
 
     source = args.pdf.expanduser().resolve()
@@ -49,7 +53,7 @@ def main():
     metadata = {"source_id": args.id, "original_name": args.original_name or source.name,
                 "original_path": str(source), "sha256": digest, "pages": pages,
                 "size_bytes": source.stat().st_size,
-                "imported_at": datetime.now().astimezone().isoformat(),
+                "imported_at": local_now(ROOT).isoformat(),
                 "filesystem_modified_at": datetime.fromtimestamp(source.stat().st_mtime).astimezone().isoformat(),
                 "content_updated_at": args.content_updated_at,
                 "date_caveat": "Import and filesystem times do not establish a content-update date.",
