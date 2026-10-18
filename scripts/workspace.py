@@ -378,6 +378,7 @@ def main():
     run_command.add_argument("--batch", required=True)
     run_command.add_argument("--quota", type=int, default=1)
     run_command.add_argument("--max-steps", type=int, default=10)
+    run_command.add_argument("--deadline", help="Offset-aware deadline for a new batch")
     commands.add_parser("status")
     projects = commands.add_parser("projects")
     projects.add_argument("--id")
@@ -422,7 +423,7 @@ def main():
         if args.command == "run":
             from runner import run, SyntheticAdapter, UnsupportedAdapter
             adapter = SyntheticAdapter(read(args.catalog)) if args.catalog else UnsupportedAdapter()
-            print(json.dumps(run(ROOT, args.batch, adapter, args.quota, args.max_steps), indent=2))
+            print(json.dumps(run(ROOT, args.batch, adapter, args.quota, args.max_steps, deadline=args.deadline), indent=2))
             return
         if args.command == "import-answers":
             from answer_import import import_changes
