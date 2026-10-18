@@ -9,7 +9,8 @@ import subprocess
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from config import select_workspace, configuration, local_now
+from config import select_workspace, configuration, local_now, private_path
+from zoneinfo import ZoneInfo
 
 ROOT = select_workspace()
 
@@ -28,7 +29,7 @@ def main():
     import fitz  # PyMuPDF is needed only for PDF import, not routine workspace commands.
 
     source = args.pdf.expanduser().resolve()
-    destination = (ROOT / args.destination).resolve()
+    destination = private_path(ROOT, args.destination)
     if not destination.is_relative_to(ROOT):
         parser.error("Destination must be inside the workspace")
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
@@ -54,7 +55,7 @@ def main():
                 "original_path": str(source), "sha256": digest, "pages": pages,
                 "size_bytes": source.stat().st_size,
                 "imported_at": local_now(ROOT).isoformat(),
-                "filesystem_modified_at": datetime.fromtimestamp(source.stat().st_mtime).astimezone().isoformat(),
+                "filesystem_modified_at": datetime.fromtimestamp(source.stat().st_mtime, ZoneInfo(configuration(ROOT)["timezone"])).isoformat(),
                 "content_updated_at": args.content_updated_at,
                 "date_caveat": "Import and filesystem times do not establish a content-update date.",
                 "extraction": "Poppler pdftotext -layout; PyMuPDF link annotations"}

@@ -28,3 +28,18 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(run(f.f.root,'resume',SyntheticAdapter([f.jobs[0]]),1,10,lambda:f.f.now)['confirmed'],1)
         before=w.records(f.f.root)[0]
         acknowledge_resume(f.f.root,f.f.now);self.assertEqual(w.records(f.f.root)[0],before)
+
+    def test_provider_cumulative_max_per_batch_then_sum_across_batches(self):
+        root=self.f.f.root
+        record_stage(root,'one','inspect',1,usage={'tokens':100,'cost_usd':1})
+        record_stage(root,'one','prepare',1,usage={'tokens':80,'cost_usd':0.8})
+        record_stage(root,'two','inspect',1,usage={'tokens':200,'cost_usd':2})
+        self.assertEqual(summary(root)['provider_usage'],{'tokens':300,'cost_usd':3})
+        record_stage(root,'unknown','inspect',1)
+        self.assertIsNone(summary(root)['provider_usage']['tokens'])
+    def test_acknowledgement_preserves_retry_count_and_reason_ledger(self):
+        f=self.f.f;identity=w.capture(f.root,f.job(),f.now)['application_id']
+        record_stop(f.root,identity,'timeout',f.now,4);record_stop(f.root,identity,'login_required',f.now,4)
+        acknowledge_resume(f.root,f.now,identity)
+        stop=record_stop(f.root,identity,'timeout',f.now,4)
+        self.assertEqual(stop['retry_count'],2);self.assertEqual(stop['counts']['timeout'],2);self.assertEqual(stop['counts']['login_required'],1)

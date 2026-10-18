@@ -86,7 +86,10 @@ def reconcile_not_submitted(root,identity,evidence,now):
         r=load(root,identity)
         if r['status']!='submission_uncertain' or not evidence.is_file():raise ValueError('reconciliation_evidence_required')
         target=root/'applications/records'/identity/'reconciliation.txt';shutil.copyfile(evidence,target)
-        r['intent']['state']='reconciled_not_submitted';r.update(status='failed',status_updated_at=now.isoformat())
+        r['intent']['state']='reconciled_not_submitted';r.pop('stop',None);r['listing_current']=False
+        for attempt in r.get('attempts',[]):
+            if attempt['attempt_id']==r['intent']['attempt_id']:attempt['state']='reconciled_not_submitted'
+        r.update(status='failed',status_updated_at=now.isoformat())
         r['events'].append({'at':now.isoformat(),'status':'failed','reason':'reconciled_not_submitted','evidence_sha256':w.digest(target)})
         save(root,r)
 

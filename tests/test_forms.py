@@ -27,3 +27,13 @@ class FormTests(unittest.TestCase):
         fields=[{'key':'unknown','text':'Unfamiliar','field_type':'canvas'}];driver=SyntheticFormDriver(fields)
         with self.assertRaisesRegex(FormError,'unsupported_form'):fill_common(driver,fields,[],self.resume)
         self.assertEqual(driver.values,{})
+
+    def test_runner_queues_unfamiliar_form_as_typed_blocker(self):
+        import test_runner
+        import workspace as w
+        from runner import run,SyntheticAdapter
+        f=test_runner.RunnerTests();f.setUp();self.addCleanup(f.doCleanups)
+        job=f.jobs[0];job['form']=[{'key':'drawing','text':'Draw a response','field_type':'canvas'}]
+        run(f.f.root,'unfamiliar',SyntheticAdapter([job]),1,5,lambda:f.f.now)
+        self.assertEqual(w.records(f.f.root)[0]['stop']['reason'],'unsupported_form')
+        self.assertFalse(w.records(f.f.root)[0].get('intent'))

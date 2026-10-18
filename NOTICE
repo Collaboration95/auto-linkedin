@@ -1,0 +1,5 @@
+Generic workflow/resume helpers and dashboard grouping logic were adapted from
+an existing local implementation supplied for this project. No third-party
+copyright/license notices were present in the audited source files. Project
+code is distributed under the accompanying MIT license. Python, Node and any
+optional PDF tools retain their respective licenses; they are not bundled.

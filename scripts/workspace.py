@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import unicodedata
 import zipfile
+import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -300,7 +301,7 @@ def event(root, args, now):
         from answers import snapshot
         from context import run_context
         answers = snapshot(root, answers, record, now)
-        attempt = directory / "submissions" / now.strftime("%Y%m%dT%H%M%S%f")
+        attempt = directory / "submissions" / (now.strftime("%Y%m%dT%H%M%S%f") + "-" + uuid.uuid4().hex)
         attempt.mkdir(parents=True)
         target = attempt / Path(resume["path"]).name
         shutil.copy2(resume["path"], target)

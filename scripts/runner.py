@@ -149,12 +149,15 @@ def execute(root,batch,action,adapter,claim,now,clock=None):
         if not isinstance(fields,list):raise AdapterError('unsupported_form')
         qids=[]
         for index,field in enumerate(fields):
+            if not isinstance(field,dict) or not isinstance(field.get('key'),str) or not field['key'] or not isinstance(field.get('text'),str) or not field['text'].strip() or field.get('field_type','text') not in {'text','select','number','boolean','upload','history'}:raise AdapterError('unsupported_form')
             if field.get('field_type') in {'upload','history'}:continue
             if not field.get('key'):raise AdapterError('unsupported_form')
             spec={k:v for k,v in field.items() if k not in {'key','value'}}
-            qid=register(root,identity,observed.get('layout','form'),field['key'],spec)['question_id'];qids.append(qid);field['question_id']=qid
+            try:qid=register(root,identity,observed.get('layout','form'),field['key'],spec)['question_id']
+            except ValueError as exc:raise AdapterError('page_changed' if str(exc)=='page_changed' else 'unsupported_form') from None
+            qids.append(qid);field['question_id']=qid
         r.update(status='preparing',status_updated_at=now.isoformat(),required_question_ids=qids,workflow={'phase':'inspected','form':fields,'layout':observed.get('layout')})
-        r.pop('stop',None);persist_record(root,r)
+        r.pop('stop',None);r.pop('reviewed_form_change',None);persist_record(root,r)
         questions={q['id']:q for q in question_store(root)['questions']}
         unresolved=[qid for qid in qids if questions[qid].get('required',True) and resolve_question(root,questions[qid],now)['status']!='resolved']
         if unresolved:block_on_answers(root,identity,unresolved,now)
@@ -241,8 +244,8 @@ def run(root,batch_id,adapter,quota=1,max_steps=10,clock=None,deadline=None,time
             from metrics import record_stage
             reused=0
             if last['action']=='prepare':
-                prepared=submission.load(root,last['application_id']).get('prepared')
-                if prepared:reused=len(w.read(private_path(root,prepared['answers_path'])))
+                measured_record=submission.load(root,last['application_id']);prepared=measured_record.get('prepared')
+                if measured_record['status']=='ready' and prepared:reused=len(w.read(private_path(root,prepared['answers_path'])))
             record_stage(root,batch_id,last['action'],max(0,timer()-stage_start),stage_retry,reused,adapter.measured_usage() if hasattr(adapter,'measured_usage') else None)
             batch['steps']+=1;batch['checkpoint']={**last,'phase':'verified','at':now.isoformat()};w.atomic_json(batch_path(root,batch_id),batch)
         else:last={'action':'stop','reason':'step_budget'}
