@@ -38,7 +38,7 @@ def save(root,record):
     w.atomic_json(root/'applications/records'/record['application_id']/'record.json',record)
 
 
-def begin_submit(root,identity,observed_url,claim,now,batch_id='manual',category='default'):
+def begin_submit(root,identity,observed_url,claim,now,batch_id='manual',category='default',quota=None):
     import workspace as w
     require_claim(root,claim)
     with w.writer(root):
@@ -47,6 +47,10 @@ def begin_submit(root,identity,observed_url,claim,now,batch_id='manual',category
         if r.get('submissions') or any(x.get('submissions') and x['canonical_listing_url']==r['canonical_listing_url'] for x in w.records(root)):
             raise ValueError('already_confirmed')
         if r.get('intent') and r['intent']['state'] in {'begun','confirmed'}:raise ValueError('reconciliation_required')
+        from batches import submit_capacity
+        batch_file=root/'runtime/batches'/(w.slug(batch_id)+'.json')
+        if batch_file.exists():quota=w.read(batch_file)['quota']
+        if quota is not None and submit_capacity(w.records(root),batch_id,quota)['remaining']<=0:raise ValueError('submit_budget_reserved_or_complete')
         w.preflight(root,r,now)
         intent={'attempt_id':uuid.uuid4().hex,'observed_job':r['canonical_listing_url'],'state':'begun','begun_at':now.isoformat(),'batch_id':batch_id,'category':category}
         r.setdefault('attempts',[]).append(intent.copy())
