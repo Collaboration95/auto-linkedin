@@ -14,6 +14,7 @@
 !/docs/verification.md
 !/master-plan.md
 !/publication.json
+!/scripts/answers.py
 !/scripts/config.py
 !/scripts/context.py
 !/scripts/export_dashboard.py
@@ -23,6 +24,7 @@
 !/scripts/submission.py
 !/scripts/workspace.py
 !/tests/run-grouping.test.cjs
+!/tests/test_answers.py
 !/tests/test_config.py
 !/tests/test_context.py
 !/tests/test_dashboard.py
