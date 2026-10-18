@@ -23,6 +23,7 @@
 !/scripts/import_pdf.py
 !/scripts/publication.py
 !/scripts/questions.py
+!/scripts/queue_state.py
 !/scripts/resolve_resume.py
 !/scripts/setup_workspace.py
 !/scripts/submission.py
@@ -36,6 +37,7 @@
 !/tests/test_dashboard.py
 !/tests/test_publication.py
 !/tests/test_questions.py
+!/tests/test_queue.py
 !/tests/test_setup.py
 !/tests/test_submission.py
 !/tests/test_workflow.py

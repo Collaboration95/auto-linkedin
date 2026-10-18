@@ -32,4 +32,7 @@ def import_changes(root,payload,now):
             data.setdefault('bindings',{})[qid]=qid
         data['schema_version']=1;data['revision']=revision+1;imports[payload['change_id']]={'hash':fingerprint,'revision':revision+1,'recorded_at':now.isoformat()}
         w.atomic_json(root/'profile/answers.json',data)
-        return {'mutation':'persisted','revision':revision+1,'changed':len(seen)}
+        result = {'mutation':'persisted','revision':revision+1,'changed':len(seen)}
+    from queue_state import recompute
+    result['queue'] = recompute(root,now)
+    return result
