@@ -52,7 +52,14 @@ def atomic_json(path, value):
         with os.fdopen(fd, "w") as stream:
             json.dump(value, stream, indent=2, ensure_ascii=False)
             stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
         os.replace(temporary, path)
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
