@@ -32,3 +32,20 @@ class SubmissionTests(unittest.TestCase):
         with self.assertRaises(ValueError):s.reconcile_not_submitted(self.root,self.identity,self.root/'absent',self.now)
         s.reconcile_not_submitted(self.root,self.identity,self.f.evidence(),self.now)
         self.assertEqual(s.load(self.root,self.identity)['status'],'failed')
+
+    def test_legacy_submit_event_is_rejected(self):
+        import argparse
+        import workspace as w
+        with self.assertRaisesRegex(ValueError,'requires_intent'):
+            w.event(self.root,argparse.Namespace(id=self.identity,status='submitted'),self.now)
+        self.assertEqual(s.load(self.root,self.identity)['status'],'ready')
+    def test_submit_refresh_detects_restored_mtime_same_size_change(self):
+        import os
+        import workspace as w
+        from context import run_context
+        p=self.root/'config.json';p.write_text('{"rules":{"minimum":3}}')
+        r=s.load(self.root,self.identity);r['prepared']['context_version']=run_context(self.root,True)['version'];s.save(self.root,r)
+        stat=p.stat();p.write_text('{"rules":{"minimum":4}}');os.utime(p,ns=(stat.st_atime_ns,stat.st_mtime_ns))
+        self.assertEqual(r['prepared']['context_version'],run_context(self.root)['version'])
+        with s.browser_claim(self.root) as claim:
+            with self.assertRaisesRegex(ValueError,'context_changed'):s.begin_submit(self.root,self.identity,r['canonical_listing_url'],claim,self.now)

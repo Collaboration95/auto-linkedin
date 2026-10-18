@@ -237,7 +237,7 @@ def preflight(root, record, now):
     from answers import revalidate
     from context import run_context
     revalidate(root, read(private_path(root, prepared["answers_path"])), now)
-    if prepared.get("context_version") != run_context(root)["version"]:
+    if prepared.get("context_version") != run_context(root, refresh=True)["version"]:
         raise ValueError("context_changed_after_preparation")
     return {"application_id": record["application_id"], "ready": True, "resume_id": current["id"]}
 
@@ -278,6 +278,8 @@ def event(root, args, now):
     directory = root / "applications/records" / slug(args.id)
     record = read(directory / "record.json")
     status = args.status
+    if status == "submitted":
+        raise ValueError("confirmation_requires_intent_api: use submission.confirm or explicit historical reconciliation")
     if status not in STATUSES or status == "discovered":
         raise ValueError("Invalid event status")
     if status == record["status"]:

@@ -18,3 +18,10 @@ class SetupTests(unittest.TestCase):
             self.assertEqual(original,{p.relative_to(root):p.read_bytes() for p in root.rglob('*') if p.is_file()})
     def test_missing_workspace_actionable(self):
         with tempfile.TemporaryDirectory() as d:self.assertIn('workspace_missing_run_init',doctor(Path(d)/'absent')['blockers'])
+
+    def test_export_installs_static_assets(self):
+        from export_dashboard import export_dashboard
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);initialize(root);result=export_dashboard(root)
+            self.assertTrue(Path(result['path']).is_file())
+            for name in ('app.js','style.css','runs.js','data.js'):self.assertTrue((root/'dashboard'/name).is_file())

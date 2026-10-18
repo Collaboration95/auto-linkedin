@@ -81,3 +81,20 @@ def reconcile_not_submitted(root,identity,evidence,now):
         r['intent']['state']='reconciled_not_submitted';r.update(status='failed',status_updated_at=now.isoformat())
         r['events'].append({'at':now.isoformat(),'status':'failed','reason':'reconciled_not_submitted','evidence_sha256':w.digest(target)})
         save(root,r)
+
+
+def record_historical_confirmation(root,identity,observed_url,evidence,now,occurred_at):
+    """Explicit evidence import only; this API never calls a browser or submits."""
+    import workspace as w
+    timestamp(occurred_at)
+    if not evidence.is_file():raise ValueError('confirmation_evidence_required')
+    with w.writer(root):
+        r=load(root,identity)
+        if w.canonical_url(observed_url)!=r['canonical_listing_url']:raise ValueError('observed_job_mismatch')
+        if r.get('submissions'):raise ValueError('already_confirmed')
+        if not r.get('prepared'):raise ValueError('historical_snapshot_required')
+        if r.get('intent',{}).get('state')=='begun':raise ValueError('use_existing_attempt_confirmation')
+        attempt_id=uuid.uuid4().hex
+        r['intent']={'attempt_id':attempt_id,'state':'begun','begun_at':now.isoformat(),'observed_job':r['canonical_listing_url'],'batch_id':'historical','category':'reconciled_history','basis':'explicit_evidence_import'}
+        r['status']='submission_uncertain';save(root,r)
+    return confirm(root,identity,attempt_id,evidence,now,occurred_at)

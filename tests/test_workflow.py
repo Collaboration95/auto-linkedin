@@ -52,6 +52,15 @@ class WorkflowTests(unittest.TestCase):
         args = argparse.Namespace(id=identity, status=status, note="", resume_scope=None, answers=None, evidence=None)
         for key, value in extra.items():
             setattr(args, key, value)
+        if status == 'submitted':
+            import submission as s
+            if not args.evidence:raise ValueError('confirmation evidence required')
+            record=self.record(identity)
+            if record.get('intent'):
+                return s.confirm(self.root,identity,record['intent']['attempt_id'],args.evidence,self.now)
+            with s.browser_claim(self.root) as claim:
+                intent=s.begin_submit(self.root,identity,record['canonical_listing_url'],claim,self.now)
+                return s.confirm(self.root,identity,intent['attempt_id'],args.evidence,self.now)
         return w.event(self.root, args, self.now)
 
     def ready(self):
@@ -177,10 +186,11 @@ class WorkflowTests(unittest.TestCase):
         self.save_registry()
         with self.assertRaisesRegex(ValueError, "review_due_at"):
             w.preflight(self.root, self.record(identity), self.now)
-        self.event(identity, "submitted", evidence=self.evidence())
+        import submission as s
+        s.record_historical_confirmation(self.root,identity,self.record(identity)["canonical_listing_url"],self.evidence(),self.now,self.now.isoformat())
         saved = self.record(identity)["submissions"][0]
         self.assertEqual(saved["id"], "backend-v1")
-        self.assertIn("review_due_at", saved["recording_warning"])
+        self.assertEqual(self.record(identity)["intent"]["basis"], "explicit_evidence_import")
 
     def test_csv_escapes_formula_like_employer_names(self):
         w.capture(self.root, self.job(company="=untrusted()"), self.now)
