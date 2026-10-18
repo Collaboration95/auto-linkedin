@@ -1,6 +1,7 @@
 """Canonical question specifications and stable per-form occurrences."""
 import copy
 import unicodedata
+import uuid
 from context import content_version
 
 
@@ -34,7 +35,7 @@ def register(root,application_id,form_key,field_key,spec,canonical_id=None):
         changed=old and (old['question_id']!=qid or old['text']!=spec['text'] or old['options']!=spec.get('options',[]))
         if changed:
             if not record.get('reviewed_form_change'):raise ValueError('page_changed')
-            oid='o-'+content_version([application_id,form_key,field_key,qid,spec['text'],spec.get('options',[])])[:24]
+            oid='o-'+uuid.uuid4().hex
             old.update(active=False,superseded_by=oid)
         elif old:oid=old['id']
         occurrence={'id':oid,'question_id':qid,'application_id':application_id,'form_key':form_key,'field_key':field_key,'text':spec['text'],'options':spec.get('options',[]),'company':record['company'],'listing_url':record['canonical_listing_url'],'record_url':'../applications/records/'+application_id+'/record.json','active':True}

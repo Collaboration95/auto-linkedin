@@ -3,6 +3,7 @@ import test_submit_boundary
 import workspace as w
 from runner import run,SyntheticAdapter
 from stops import acknowledge_resume
+from stops import record_stop
 from questions import store as question_store,inbox
 from answers import store
 
@@ -25,3 +26,21 @@ class ReviewedFormTests(unittest.TestCase):
         acknowledge_resume(root,f.f.now);adapter.catalog[0].pop('page_values');run(root,'boundary',adapter,1,2,lambda:f.f.now)
         current=w.records(root)[0];self.assertEqual(current['status'],'ready');self.assertNotEqual(current['prepared']['answers_path'],before['answers_path']);self.assertEqual(original,(root/before['answers_path']).read_bytes())
         self.assertEqual(run(root,'boundary',adapter,1,2,lambda:f.f.now)['confirmed'],1)
+
+    def test_returning_options_keep_distinct_reviewed_occurrence_history(self):
+        f=self.f;adapter=f.prepared();root=f.f.root;identity=w.records(root)[0]['application_id']
+        option_sets=[['Day','Night'],['Day','Night','B'],['Day','Night','C'],['Day','Night','B']]
+        for options in option_sets[1:]:
+            adapter.catalog[0]['form'][0]['options']=options
+            record_stop(root,identity,'page_changed',f.f.now)
+            acknowledge_resume(root,f.f.now)
+            run(root,'boundary',adapter,1,1,lambda:f.f.now)
+        occurrences=question_store(root)['occurrences'];ids=[o['id'] for o in occurrences]
+        self.assertEqual(len(ids),4);self.assertEqual(len(set(ids)),4)
+        self.assertEqual([o['options'] for o in occurrences],option_sets)
+        self.assertEqual([o['superseded_by'] for o in occurrences[:-1]],ids[1:])
+        self.assertEqual([o['id'] for o in occurrences if o['active']],[ids[-1]])
+        from questions import register
+        repeated=register(root,identity,'synthetic-v1','schedule',adapter.catalog[0]['form'][0])
+        self.assertEqual(repeated['occurrence_id'],ids[-1])
+        self.assertEqual(len(question_store(root)['occurrences']),4)
