@@ -1,0 +1,8 @@
+# Bootstrap publication boundary: deny every path until privacy separation passes.
+# Do not force-add files. Expand this allowlist only for audited generic code.
+# Private profiles, resumes (including filenames), applications, sources, exports,
+# local instructions, screenshots, credentials and temporary files stay untracked.
+*
+!/.gitignore
+!/master-plan.md
+
