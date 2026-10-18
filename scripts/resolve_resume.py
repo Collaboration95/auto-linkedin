@@ -6,8 +6,9 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from config import select_workspace, configuration, local_now
 
-ROOT = Path(__import__("os").environ.get("AUTO_LINKEDIN_WORKSPACE", "~/.local/share/auto-linkedin")).expanduser().resolve()
+ROOT = select_workspace()
 
 
 def timestamp(value):
@@ -120,7 +121,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scope", required=True)
     parser.add_argument("--purpose", choices=("reference", "application"), default="application")
+    parser.add_argument("--workspace", type=Path)
     args = parser.parse_args()
+    global ROOT
+    ROOT = select_workspace(args.workspace)
     try:
         registry = json.loads((ROOT / "resumes/registry.json").read_text())
         result = resolve(registry, args.scope, args.purpose, datetime.now(timezone.utc))
