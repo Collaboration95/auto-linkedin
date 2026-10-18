@@ -10,9 +10,10 @@ INPUTS=('profile/answers.json','config.json','resumes/registry.json','profile/hi
 def content_version(value):return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
 
 
-def run_context(root,refresh=False):
+def run_context(root,refresh=False,include_history=True):
     from workspace import read,atomic_json
-    signatures={name:[(root/name).stat().st_mtime_ns,(root/name).stat().st_size] if (root/name).exists() else None for name in INPUTS}
+    inputs=tuple(name for name in INPUTS if include_history or name!='profile/history.json')
+    signatures={name:[(root/name).stat().st_mtime_ns,(root/name).stat().st_size] if (root/name).exists() else None for name in inputs}
     target=root/'runtime/context.json'
     if target.exists() and not refresh:
         cached=read(target)
@@ -22,6 +23,6 @@ def run_context(root,refresh=False):
     cfg=configuration(root)
     payload={'schema_version':1,'answers':answers,'preferences':{k:cfg[k] for k in ('timezone','resume_scope','browser','rules')},'resumes':registry['releases'],'blockers':sorted(a['id'] for a in answers if a.get('value') is None)}
     history_path=root/'profile/history.json'
-    payload['history']=read(history_path) if history_path.exists() else None
+    payload['history']=read(history_path) if include_history and history_path.exists() else None
     result={'version':content_version(payload),'snapshot':payload,'signatures':signatures}
     atomic_json(target,result);return result

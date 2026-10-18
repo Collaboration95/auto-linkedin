@@ -236,9 +236,19 @@ def preflight(root, record, now):
     if digest(private_path(root, prepared["exact_resume_copy"])) != prepared["sha256"] or digest(private_path(root, prepared["answers_path"])) != prepared["answers_sha256"]:
         raise ValueError("Prepared submission snapshot was modified")
     from answers import revalidate
-    from context import run_context
+    from context import run_context,content_version
+    from forms import needs_history,resolve_history,FormError
     revalidate(root, read(private_path(root, prepared["answers_path"])), now)
-    if prepared.get("context_version") != run_context(root, refresh=True)["version"]:
+    history_required=needs_history(record.get('workflow',{}).get('form',[])) or bool(prepared.get('history_path'))
+    if history_required:
+        try:facts=resolve_history(root,now,record)
+        except FormError as exc:raise ValueError(exc.reason) from None
+        if not prepared.get('history_path') or not prepared.get('history_sha256'):
+            raise ValueError('history_snapshot_required_prepare_again')
+        history_path=private_path(root,prepared['history_path'])
+        if digest(history_path)!=prepared['history_sha256'] or content_version(read(history_path))!=content_version(facts):
+            raise ValueError('history_changed_after_preparation')
+    if prepared.get("context_version") != run_context(root, refresh=True,include_history=history_required)["version"]:
         raise ValueError("context_changed_after_preparation")
     return {"application_id": record["application_id"], "ready": True, "resume_id": current["id"]}
 
@@ -300,7 +310,11 @@ def event(root, args, now):
             raise ValueError("Answers must be a JSON list with exact question and answer fields (an empty list is allowed)")
         from answers import snapshot
         from context import run_context
+        from forms import needs_history,resolve_history,FormError
         answers = snapshot(root, answers, record, now)
+        history_required=needs_history(record.get('workflow',{}).get('form',[]))
+        try:history=resolve_history(root,now,record) if history_required else None
+        except FormError as exc:raise ValueError(exc.reason) from None
         attempt = directory / "submissions" / (now.strftime("%Y%m%dT%H%M%S%f") + "-" + uuid.uuid4().hex)
         attempt.mkdir(parents=True)
         target = attempt / Path(resume["path"]).name
@@ -310,7 +324,11 @@ def event(root, args, now):
                               "exact_resume_copy": str(target.relative_to(root)),
                               "answers_path": str((attempt / "answers.json").relative_to(root)),
                               "answers_sha256": digest(attempt / "answers.json"),
-                              "context_version": run_context(root)["version"]}
+                              "context_version": run_context(root,include_history=history_required)["version"]}
+        if history is not None:
+            atomic_json(attempt / 'history.json',history)
+            record['prepared'].update(history_path=str((attempt / 'history.json').relative_to(root)),
+                                      history_sha256=digest(attempt / 'history.json'))
     if status == "submission_uncertain" and not record.get("prepared"):
         raise ValueError("Prepare and snapshot exact resume/answers before uncertainty")
     if record["status"] == "submission_uncertain" and status != "submitted":
