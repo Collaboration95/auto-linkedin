@@ -4,7 +4,7 @@ import copy
 from pathlib import Path
 from answers import resolve_question
 from batches import submit_capacity
-from config import configuration,local_now
+from config import configuration,local_now,private_path
 from eligibility import evaluate
 from questions import register,store as question_store
 from queue_state import recompute,block_on_answers,execution_guard
@@ -12,6 +12,9 @@ from stops import record_stop,retry_eligible,browser_stopped
 import submission as submission
 
 class AdapterError(Exception):
+    def __init__(self,reason):self.reason=reason;super().__init__(reason)
+
+class BoundaryStop(Exception):
     def __init__(self,reason):self.reason=reason;super().__init__(reason)
 
 class UnsupportedAdapter:
@@ -24,22 +27,42 @@ class UnsupportedAdapter:
 
 class SyntheticAdapter:
     """Fictional catalog and confirmations; never opens or contacts an employer."""
-    def __init__(self,catalog,failures=None):self.catalog=copy.deepcopy(catalog);self.failures=failures or {};self.calls=[]
+    def __init__(self,catalog,failures=None):self.catalog=copy.deepcopy(catalog);self.failures=failures or {};self.calls=[];self.pages={};self.root=None
+    def bind_workspace(self,root):
+        import workspace as w
+        self.root=root;p=root/'runtime/synthetic-pages.json'
+        self.pages=w.read(p) if p.exists() else {}
+    def job(self,url):
+        import workspace as w
+        job=next((j for j in self.catalog if isinstance(j,dict) and isinstance(j.get('listing_url'),str) and w.canonical_url(j['listing_url'])==url),None)
+        if not job:raise AdapterError('page_changed')
+        return job
     def measured_usage(self):return None
     def discover(self):self.calls.append('discover');return copy.deepcopy(self.catalog)
     def inspect(self,context):
         self.calls.append('inspect')
-        job=next((j for j in self.catalog if j['listing_url']==context['listing_url']),None)
+        job=self.job(context['listing_url'])
         if not job:raise AdapterError('page_changed')
         return {'observed_url':job['listing_url'],'listing_current':True,'requirements_verified':job.get('requirements_verified',False),'requirements':job.get('requirements',{}),'form':job.get('form',[]),'layout':'synthetic-v1'}
     def prepare(self,context):
         self.calls.append('prepare')
         from forms import fill_common,SyntheticFormDriver,FormError
-        fields=context['form']['form'];driver=SyntheticFormDriver(fields,context.get('history'))
+        fields=context['form']['form'];job=self.job(context['listing_url']);driver=SyntheticFormDriver(job.get('form',[]),job.get('history'))
         try:verified=fill_common(driver,fields,context['answers'],context['resume'],context.get('history'))
         except FormError as exc:raise AdapterError(exc.reason) from None
+        self.pages[context['listing_url']]=driver.snapshot()
+        if self.root:
+            import workspace as w
+            w.atomic_json(self.root/'runtime/synthetic-pages.json',self.pages)
         return {**verified,'observed_url':context['listing_url']}
-    def observe(self,context):self.calls.append('observe');return {'observed_url':context['listing_url']}
+    def observe(self,context):
+        self.calls.append('observe');job=self.job(context['listing_url'])
+        page=copy.deepcopy(self.pages.get(context['listing_url'],{'values':{},'uploads':{},'history':None}))
+        page['fields']=copy.deepcopy(job.get('form',[]))
+        if 'page_values' in job:page['values']=job['page_values']
+        if 'selected_resume_sha256' in job:page['uploads']={f['key']:job['selected_resume_sha256'] for f in page['fields'] if f.get('field_type')=='upload'}
+        if 'history' in job:page['history']=job['history']
+        return {'observed_url':job['listing_url'],'listing_current':True,'requirements_verified':job.get('requirements_verified',False),'requirements':copy.deepcopy(job.get('requirements',{})),'page':page}
     def submit(self,context):
         self.calls.append('submit')
         if context['listing_url'] in self.failures:raise AdapterError(self.failures[context['listing_url']])
@@ -91,15 +114,27 @@ def persist_record(root,record):
     with w.writer(root):submission.save(root,record)
 
 
-def execute(root,batch,action,adapter,claim,now):
+def execute(root,batch,action,adapter,claim,now,clock=None):
     import workspace as w
+    clock=clock or (lambda:local_now(root))
     kind=action['action'];identity=action.get('application_id')
     if kind=='discover':
         jobs=adapter.discover()
         if not isinstance(jobs,list):raise AdapterError('page_changed')
-        for job in jobs:
-            if not isinstance(job,dict):raise AdapterError('page_changed')
-            w.capture(root,copy.deepcopy(job),now)
+        from context import content_version
+        fingerprint=content_version(jobs)
+        if batch.get('discovery_fingerprint',fingerprint)!=fingerprint:raise AdapterError('page_changed')
+        batch['discovery_fingerprint']=fingerprint
+        limit=configuration(root).get('max_discovery_items',100)
+        if type(limit) is not int or limit<1:raise ValueError('invalid_discovery_budget')
+        for index in range(batch.get('discovery_cursor',0),min(len(jobs),limit)):
+            try:
+                if not isinstance(jobs[index],dict):raise ValueError('invalid_discovery_item')
+                w.capture(root,copy.deepcopy(jobs[index]),now)
+            except (ValueError,KeyError,TypeError,OSError):
+                batch.setdefault('discovery_failures',[]).append({'item_index':index,'reason':'invalid_discovery_item'})
+            batch['discovery_cursor']=index+1;w.atomic_json(batch_path(root,batch['batch_id']),batch)
+        if len(jobs)>limit:batch.setdefault('discovery_failures',[]).append({'reason':'discovery_item_budget'})
         batch['discovery_done']=True;return
     r=submission.load(root,identity);minimal=action_context(r)
     if kind=='inspect':
@@ -149,20 +184,35 @@ def execute(root,batch,action,adapter,claim,now):
         with w.writer(root):w.event(root,argparse.Namespace(id=identity,status='ready',note='',resume_scope=resume['scope'],answers=target,evidence=None),now)
         return
     if kind=='submit':
-        try:execution_guard(root,r,now);w.preflight(root,r,now)
-        except ValueError:raise AdapterError('outdated_fact') from None
         observed=adapter.observe(minimal)
-        intent=submission.begin_submit(root,identity,observed['observed_url'],claim,now,batch['batch_id'],r.get('category','default'),batch['quota'])
+        submit_now=clock()
+        from budgets import stop_reason
+        budget_reason=stop_reason(batch,submit_now,adapter.measured_usage() if hasattr(adapter,'measured_usage') else None)
+        if budget_reason:raise BoundaryStop(budget_reason)
+        if observed.get('listing_current') is not True:raise AdapterError('page_changed')
+        current_eligibility=evaluate(observed,configuration(root)['rules'])
+        if current_eligibility['decision']!='include':raise AdapterError('eligibility_review')
+        from forms import verify_common,FormError
+        try:
+            execution_guard(root,r,submit_now);w.preflight(root,r,submit_now)
+            items=w.read(private_path(root,r['prepared']['answers_path']))
+            exact={'path':str(private_path(root,r['prepared']['exact_resume_copy'])),'sha256':r['prepared']['sha256']}
+            history=w.read(root/'profile/history.json')['entries'] if (root/'profile/history.json').exists() else None
+            verify_common(observed.get('page',{}),r.get('workflow',{}).get('form',[]),items,exact,history)
+        except FormError as exc:raise AdapterError(exc.reason) from None
+        except (ValueError,KeyError,OSError):raise AdapterError('outdated_fact') from None
+        intent=submission.begin_submit(root,identity,observed['observed_url'],claim,submit_now,batch['batch_id'],r.get('category','default'),batch['quota'])
         confirmation=adapter.submit({**minimal,'attempt_id':intent['attempt_id'],'prepared':r['prepared']})
         if not confirmation or not confirmation.get('confirmation'):raise AdapterError('uncertain_submit')
         evidence=root/'applications/records'/identity/'adapter-confirmation.txt';evidence.write_text(confirmation['confirmation'])
-        submission.confirm(root,identity,intent['attempt_id'],evidence,now,confirmation.get('occurred_at'))
+        submission.confirm(root,identity,intent['attempt_id'],evidence,clock(),confirmation.get('occurred_at'))
 
 
 def run(root,batch_id,adapter,quota=1,max_steps=10,clock=None,deadline=None):
     import workspace as w
     if type(max_steps) is not int or max_steps<0:raise ValueError('invalid_step_budget')
     clock=clock or (lambda:local_now(root));batch=initialize_batch(root,batch_id,quota,clock(),deadline);last={'action':'stop','reason':'step_budget'}
+    if hasattr(adapter,'bind_workspace'):adapter.bind_workspace(root)
     with submission.browser_claim(root) as claim:
         for _ in range(max_steps):
             now=clock()
@@ -173,13 +223,15 @@ def run(root,batch_id,adapter,quota=1,max_steps=10,clock=None,deadline=None):
             recompute(root,now);last=next_action(root,batch,now)
             if last['action']=='stop':break
             batch['checkpoint']={**last,'phase':'started','at':now.isoformat()};w.atomic_json(batch_path(root,batch_id),batch)
-            try:execute(root,batch,last,adapter,claim,now)
+            try:execute(root,batch,last,adapter,claim,now,clock)
             except AdapterError as exc:
                 if exc.reason in {'timeout','throttled'}:batch['retries']+=1
                 if last.get('application_id'):record_stop(root,last['application_id'],exc.reason,now,batch['budgets']['max_retries'])
                 else:
                     w.atomic_json(root/'runtime/browser-stop.json',{'reason':exc.reason,'at':now.isoformat(),'requires_resume':True})
                     last={'action':'stop','reason':exc.reason};break
+            except BoundaryStop as exc:
+                last={'action':'stop','reason':exc.reason};break
             except KeyboardInterrupt:
                 batch['checkpoint']={**last,'phase':'interrupted','at':clock().isoformat()};w.atomic_json(batch_path(root,batch_id),batch)
                 last={'action':'stop','reason':'interrupted'};break

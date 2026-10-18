@@ -58,4 +58,5 @@
 !/tests/test_setup.py
 !/tests/test_stops.py
 !/tests/test_submission.py
+!/tests/test_submit_boundary.py
 !/tests/test_workflow.py
