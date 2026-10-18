@@ -71,7 +71,22 @@ def export_dashboard(root=ROOT):
     generated_at = local_now(root).isoformat()
     from questions import inbox
     from answers import store
-    payload = {"questions": inbox(root, local_now(root)), "answer_revision": store(root).get("revision", 0), "answer_import_ids": sorted(store(root).get("imports", {})), "timezone": tz, "generated_at": generated_at, "applications": applications}
+    from queue_state import unlock_counts
+    from resolve_resume import timestamp
+    from context import run_context
+    questions = inbox(root, local_now(root))
+    counts = unlock_counts([json.loads(p.read_text()) for p in sorted((root / "applications/records").glob("*/record.json"))], questions)
+    for question in questions:
+        question["unlock_count"] = counts[question["id"]]
+    outdated = []
+    for answer in store(root)["answers"]:
+        try:
+            expired = not answer.get("review_due_at") or any(answer.get(k) and local_now(root) >= timestamp(answer[k]) for k in ("review_due_at", "valid_until"))
+        except (ValueError, TypeError):
+            expired = True
+        if expired:
+            outdated.append({"answer_id": answer["id"], "reason": "review_due"})
+    payload = {"attention": {"uncertain": [a["id"] for a in applications if a["status"] == "submission_uncertain"], "outdated_facts": outdated}, "questions": questions, "answer_revision": store(root).get("revision", 0), "answer_import_ids": sorted(store(root).get("imports", {})), "timezone": tz, "generated_at": generated_at, "applications": applications}
     assets = Path(__file__).resolve().parents[1] / "dashboard"
     (root / "dashboard").mkdir(parents=True, exist_ok=True)
     for name in ("index.html", "app.js", "style.css", "runs.js", "questions.js"):
