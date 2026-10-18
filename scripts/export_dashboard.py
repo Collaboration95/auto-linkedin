@@ -39,11 +39,13 @@ def local_file(root, relative):
     return path
 
 
-def export_dashboard(root=ROOT):
+def export_dashboard(root=ROOT, record_snapshot=None):
     root = root.resolve()
     applications = []
-    for source in sorted((root / "applications/records").glob("*/record.json")):
-        record = json.loads(source.read_text())
+    from workspace import records
+    snapshot = records(root) if record_snapshot is None else record_snapshot
+    for record in snapshot:
+        source = root / "applications/records" / record["application_id"] / "record.json"
         def resume(saved):
             path = local_file(root, saved.get("exact_resume_copy"))
             return {"id": saved.get("id"), "file": path.name if path else None,
@@ -68,25 +70,26 @@ def export_dashboard(root=ROOT):
             "prepared": {"at": prepared.get("prepared_at"), "resume": resume(prepared)} if prepared else None})
     applications.sort(key=lambda app: app.get("updated_at") or "", reverse=True)
     tz = configuration(root)["timezone"]
-    generated_at = local_now(root).isoformat()
+    now = local_now(root)
+    generated_at = now.isoformat()
     from questions import inbox
     from answers import store
     from queue_state import unlock_counts
     from resolve_resume import timestamp
-    from context import run_context
-    questions = inbox(root, local_now(root))
-    counts = unlock_counts([json.loads(p.read_text()) for p in sorted((root / "applications/records").glob("*/record.json"))], questions)
+    answer_data = store(root)
+    questions = inbox(root, now, answer_data)
+    counts = unlock_counts(snapshot, questions)
     for question in questions:
         question["unlock_count"] = counts[question["id"]]
     outdated = []
-    for answer in store(root)["answers"]:
+    for answer in answer_data["answers"]:
         try:
-            expired = not answer.get("review_due_at") or any(answer.get(k) and local_now(root) >= timestamp(answer[k]) for k in ("review_due_at", "valid_until"))
+            expired = not answer.get("review_due_at") or any(answer.get(k) and now >= timestamp(answer[k]) for k in ("review_due_at", "valid_until"))
         except (ValueError, TypeError):
             expired = True
         if expired:
             outdated.append({"answer_id": answer["id"], "reason": "review_due"})
-    payload = {"attention": {"uncertain": [a["id"] for a in applications if a["status"] == "submission_uncertain"], "outdated_facts": outdated}, "questions": questions, "answer_revision": store(root).get("revision", 0), "answer_import_ids": sorted(store(root).get("imports", {})), "timezone": tz, "generated_at": generated_at, "applications": applications}
+    payload = {"attention": {"uncertain": [a["id"] for a in applications if a["status"] == "submission_uncertain"], "outdated_facts": outdated}, "questions": questions, "answer_revision": answer_data.get("revision", 0), "answer_import_ids": sorted(answer_data.get("imports", {})), "timezone": tz, "generated_at": generated_at, "applications": applications}
     assets = Path(__file__).resolve().parents[1] / "dashboard"
     (root / "dashboard").mkdir(parents=True, exist_ok=True)
     for name in ("index.html", "app.js", "style.css", "runs.js", "questions.js"):

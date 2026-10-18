@@ -38,6 +38,7 @@
     "tests/test_publication.py",
     "tests/test_questions.py",
     "tests/test_queue.py",
+    "tests/test_recovery.py",
     "tests/test_setup.py",
     "tests/test_submission.py",
     "tests/test_workflow.py"

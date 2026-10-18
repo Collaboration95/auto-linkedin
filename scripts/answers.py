@@ -70,10 +70,10 @@ def revalidate(root,items,now):
         if answer['value']!=item['answer']:raise ValueError('answer_changed_after_preparation')
 
 
-def resolve_question(root,question,now):
+def resolve_question(root,question,now,data=None):
     """Only approved exact normalized aliases; ambiguity remains unresolved."""
     from questions import normalize
-    data=store(root);bound=data.get('bindings',{}).get(question.get('id')) or question.get('answer_id')
+    data=store(root) if data is None else data;bound=data.get('bindings',{}).get(question.get('id')) or question.get('answer_id')
     candidates=[]
     for answer in data['answers']:
         explicit=answer['id']==bound
