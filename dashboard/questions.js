@@ -12,6 +12,7 @@
       const card = node('article'); card.className = 'question-card'; card.id = q.id;
       card.append(node('h3', q.text), node('p', q.status === 'resolved' ? 'Persisted answer' : 'Needs an answer'));
       if (q.options?.length) card.append(node('p', `Options: ${q.options.join(' · ')}`));
+      card.append(node('p', `${q.unlock_count || 0} application(s) unlock when this answer is resolved.`));
       const label = node('label', 'Reviewed answer'); label.className = 'answer-editor';
       let input;
       if (q.field_type === 'select' || q.field_type === 'boolean') {
@@ -40,15 +41,34 @@
       card.append(affected); list.append(card);
     }
     if (!list.children.length) list.append(node('p', 'No questions yet.'));
+    const attention = document.getElementById('attention-items'); attention.replaceChildren();
+    const unresolved = (data.questions || []).filter(q => q.status !== 'resolved').length;
+    const review = node('button', `${unresolved} unresolved question(s)`); review.type = 'button'; review.addEventListener('click', () => select('questions-panel')); attention.append(review);
+    for (const id of data.attention?.uncertain || []) {
+      const app = data.applications.find(a => a.id === id), a = node('a', `Check uncertain submission: ${app?.company || id}`); a.href = '#app-' + id; a.addEventListener('click', () => select('history-panel')); attention.append(a);
+    }
+    for (const fact of data.attention?.outdated_facts || []) attention.append(node('p', `Outdated fact requires review: ${fact.answer_id}`));
     document.getElementById('question-count').textContent = (data.questions || []).filter(q => q.status !== 'resolved').length;
   }
   function select(id) {
     for (const b of document.querySelectorAll('[data-panel]')) {
-      const active = b.dataset.panel === id; b.setAttribute('aria-selected', String(active));
+      const active = b.dataset.panel === id; b.setAttribute('aria-selected', String(active)); b.tabIndex = active ? 0 : -1;
       document.getElementById(b.dataset.panel).hidden = !active;
     }
   }
-  for (const b of document.querySelectorAll('[data-panel]')) b.addEventListener('click', () => select(b.dataset.panel));
+  for (const b of document.querySelectorAll('[data-panel]')) {
+    b.addEventListener('click', () => select(b.dataset.panel));
+    b.addEventListener('keydown', event => {
+      const tabs = [...document.querySelectorAll('[data-panel]')]; let i = tabs.indexOf(b);
+      if (event.key === 'ArrowRight') i = (i + 1) % tabs.length;
+      else if (event.key === 'ArrowLeft') i = (i + tabs.length - 1) % tabs.length;
+      else if (event.key === 'Home') i = 0;
+      else if (event.key === 'End') i = tabs.length - 1;
+      else return;
+      event.preventDefault(); select(tabs[i].dataset.panel); tabs[i].focus();
+    });
+  }
+  select('questions-panel');
   document.getElementById('export-answers').addEventListener('click', () => {
     if (!edits.size) { document.getElementById('answer-state').textContent = 'Change at least one answer before exporting.'; return; }
     const id = 'changes-' + (globalThis.crypto?.randomUUID?.() || Date.now() + '-' + Math.random().toString(36).slice(2));

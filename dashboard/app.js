@@ -1,10 +1,10 @@
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const TZ = "Asia/Singapore";
+  let TZ = "UTC";
   const LABELS = { discovered: "Found", preparing: "Preparing", awaiting_answer: "Needs an answer", ready: "Ready", submitted: "Applied", submission_uncertain: "Check submission", failed: "Failed", skipped: "Skipped", rejected: "Rejected", interview: "Interview", withdrawn: "Withdrawn" };
-  const timeFormat = new Intl.DateTimeFormat("en-SG", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false });
-  const dateFormat = new Intl.DateTimeFormat("en-SG", { timeZone: TZ, day: "numeric", month: "short", year: "numeric" });
+  let timeFormat = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false });
+  let dateFormat = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, day: "numeric", month: "short", year: "numeric" });
   const state = { data: { applications: [] }, query: "", status: "" };
   const validDate = (value) => Number.isFinite(Date.parse(value));
   const dateText = (value) => validDate(value) ? `${dateFormat.format(new Date(value))}, ${timeFormat.format(new Date(value))}` : "Time not recorded";
@@ -33,9 +33,14 @@
       seen.add(app.id);
       return { ...app, events: Array.isArray(app.events) ? app.events : [], submissions: Array.isArray(app.submissions) ? app.submissions : [] };
     });
+    TZ = payload.timezone || "UTC";
+    timeFormat = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false });
+    dateFormat = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, day: "numeric", month: "short", year: "numeric" });
+    $("timezone-label").textContent = `All times ${TZ}`;
     state.data = { ...payload, applications };
     $("error").hidden = true;
     window.QuestionInbox?.render(state.data);
+    if (location.hash.startsWith("#app-")) { window.QuestionInbox?.select("history-panel"); setTimeout(() => document.getElementById(location.hash.slice(1))?.scrollIntoView(), 0); }
     render();
   }
   function render() {
@@ -50,7 +55,7 @@
     $("empty-title").textContent = allRuns.length ? "No matching entries." : "No applications logged.";
     const sent = visible.reduce((count, run) => count + run.entries.filter((e) => e.kind === "submitted").length, 0);
     $("result-count").textContent = `${visible.length} ${visible.length === 1 ? "run" : "runs"} · ${sent} ${sent === 1 ? "application" : "applications"}`;
-    $("updated").textContent = state.data.generated_at ? `Updated ${dateText(state.data.generated_at)} SGT` : "Load application JSON to get started";
+    $("updated").textContent = state.data.generated_at ? `Updated ${dateText(state.data.generated_at)} ${TZ}` : "Load application JSON to get started";
   }
   function runBlock(run) {
     const section = el("section", null, "run"); section.dataset.runId = run.id;
@@ -58,7 +63,7 @@
     const title = el("div");
     title.append(el("h3", run.number === null ? "Undated entries" : `Run ${String(run.number).padStart(3, "0")}`, "run-title"));
     const span = run.started_at === run.ended_at ? dateText(run.started_at) : `${dateText(run.started_at)} → ${dateText(run.ended_at)}`;
-    title.append(el("p", run.started_at ? span + " SGT" : "Timestamp missing from the saved record", "run-time"));
+    title.append(el("p", run.started_at ? span + " " + TZ : "Timestamp missing from the saved record", "run-time"));
     const sent = run.entries.filter((entry) => entry.kind === "submitted").length;
     const pending = run.entries.length - sent;
     header.append(title, el("span", [`${sent} applied`, pending ? `${pending} other` : ""].filter(Boolean).join(" · "), "run-summary"));
@@ -94,12 +99,12 @@
     const app = entry.app, resume = entry.resume;
     $("detail-title").textContent = app.title;
     $("detail-company").textContent = [app.company, app.location].filter(Boolean).join(" · ");
-    $("detail-meta").replaceChildren(pill(entry.status), el("span", dateText(entry.at) + " SGT"), el("span", `Applied by: ${entry.applied_by || "Not recorded"}`));
+    $("detail-meta").replaceChildren(pill(entry.status), el("span", dateText(entry.at) + " " + TZ), el("span", `Applied by: ${entry.applied_by || "Not recorded"}`));
     $("detail-links").replaceChildren(...[link("Original job post ↗", app.job_url), link("Employer application page ↗", app.application_url), resume?.url ? link(`${entry.kind === "submitted" ? "Submitted" : "Prepared"} resume ↗`, resume.url) : null].filter(Boolean));
     $("detail-description").textContent = app.description || "No job description was saved for this application.";
     $("detail-notes").textContent = app.notes || ""; $("detail-notes-section").hidden = !app.notes;
     $("detail-events").replaceChildren(...[...app.events].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).map((event) => {
-      const item = el("li"); item.append(el("time", dateText(event.at) + " SGT"), el("span", LABELS[event.status] || event.status));
+      const item = el("li"); item.append(el("time", dateText(event.at) + " " + TZ), el("span", LABELS[event.status] || event.status));
       if (event.note) item.append(el("p", event.note));
       return item;
     }));
@@ -122,7 +127,7 @@
           if (!old || new Date(app.updated_at || 0) >= new Date(old.updated_at || 0)) merged.set(app.id, app);
         }
       }
-      loadData({ generated_at: payloads.map((p) => p.generated_at).filter(Boolean).sort().at(-1), applications: [...merged.values()] });
+      loadData({ ...payloads.at(-1), generated_at: payloads.map((p) => p.generated_at).filter(Boolean).sort().at(-1), applications: [...merged.values()] });
     } catch (error) { $("error").textContent = `Could not load JSON: ${error.message}`; $("error").hidden = false; }
     finally { event.target.value = ""; }
   });

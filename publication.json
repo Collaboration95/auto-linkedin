@@ -29,6 +29,7 @@
     "tests/test_aliases.py",
     "tests/test_answer_import.py",
     "tests/test_answers.py",
+    "tests/test_attention.py",
     "tests/test_config.py",
     "tests/test_context.py",
     "tests/test_dashboard.py",
