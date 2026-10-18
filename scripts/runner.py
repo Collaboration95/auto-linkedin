@@ -173,14 +173,11 @@ def execute(root,batch,action,adapter,claim,now,clock=None):
                 continue
             answer=resolved['answer'];items.append({'question':q['text'],'question_spec':q,'answer':answer['value'],'source_answer_id':answer['id']})
         if blocked:block_on_answers(root,identity,blocked,now);return
-        history=None
-        if any(f.get('field_type')=='history' for f in r['workflow']['form']):
-            from resolve_resume import timestamp
-            path=root/'profile/history.json'
-            if not path.is_file():raise AdapterError('outdated_fact')
-            facts=w.read(path)
-            if not facts.get('source',{}).get('id') or not facts.get('source',{}).get('version') or now>=timestamp(facts['review_due_at']):raise AdapterError('outdated_fact')
-            history=facts['entries']
+        from forms import needs_history,resolve_history,FormError
+        try:
+            facts=resolve_history(root,now,r) if needs_history(r['workflow']['form']) else None
+        except FormError as exc:raise AdapterError(exc.reason) from None
+        history=facts['entries'] if facts is not None else None
         verified=adapter.prepare({**minimal,'form':r['workflow'],'answers':items,'resume':resume,'history':history})
         if verified.get('verified') is not True or w.canonical_url(verified.get('observed_url',''))!=r['canonical_listing_url']:raise AdapterError('page_changed')
         target=root/'applications/records'/identity/'form-answers.json';w.atomic_json(target,items)
@@ -200,7 +197,8 @@ def execute(root,batch,action,adapter,claim,now,clock=None):
             execution_guard(root,r,submit_now);w.preflight(root,r,submit_now)
             items=w.read(private_path(root,r['prepared']['answers_path']))
             exact={'path':str(private_path(root,r['prepared']['exact_resume_copy'])),'sha256':r['prepared']['sha256']}
-            history=w.read(root/'profile/history.json')['entries'] if (root/'profile/history.json').exists() else None
+            history_path=r['prepared'].get('history_path')
+            history=w.read(private_path(root,history_path))['entries'] if history_path else None
             verify_common(observed.get('page',{}),r.get('workflow',{}).get('form',[]),items,exact,history)
         except FormError as exc:raise AdapterError(exc.reason) from None
         except (ValueError,KeyError,OSError):raise AdapterError('outdated_fact') from None

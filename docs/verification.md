@@ -2,6 +2,8 @@
 
 Reviewed form transitions retain unique occurrence IDs even when options return to an earlier set; an unchanged occurrence keeps its saved ID. `ReviewedFormTests` checks A → B → C → B history and stable repeated registration.
 
+Continuation (#8/#20): required work history is validated at preparation and submission preflight, including direct begin-submit and CLI preflight. `RequiredHistoryTests` covers expiry during observation, both deadline fields, matching and incompatible fact/source/entry scopes, missing/changed/invalid facts, snapshot tampering, unaffected unrelated forms, and preserving exact history when a begun submission is confirmed after facts expire or change. `ContextTests` checks that unrelated history edits do not cause profile rereads or invalidate forms that do not use history. History snapshots remain workspace-relative and private; no live employer action is used.
+
 All fixtures use temporary workspaces and fictional records. No employer submissions.
 
 - #4: Audited generic helpers and grouping tests reused; neutral title/instructions, external default, explicit path manifest, staged/history scan. `test_publication` exercises content/path canaries, optional markers and normal Git ignore containment; foundation suites run below.

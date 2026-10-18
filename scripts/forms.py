@@ -9,6 +9,58 @@ class FormError(Exception):
     def __init__(self,reason):self.reason=reason;super().__init__(reason)
 
 
+def needs_history(fields):
+    return any(field.get('field_type')=='history' for field in fields)
+
+
+def _valid_history_scope(scope):
+    return isinstance(scope,dict) and all(
+        isinstance(key,str) and key.strip() and isinstance(value,str) and value.strip()
+        for key,value in scope.items())
+
+
+def resolve_history(root,now,record=None):
+    """Read reviewed facts only for a form that uses history; never supply defaults."""
+    from config import private_path
+    from resolve_resume import timestamp
+    from workspace import read
+    try:
+        facts=read(private_path(root,'profile/history.json'))
+        source=facts.get('source',{})
+        version=source.get('version')
+        if (not isinstance(source.get('id'),str) or not source['id'].strip()
+                or type(version) not in (int,str) or not version
+                or isinstance(version,str) and not version.strip()
+                or source.get('kind') not in {None,'user','verified_fact'}):
+            raise FormError('outdated_fact')
+        if not isinstance(facts.get('entries'),list) or any(not isinstance(entry,dict) for entry in facts['entries']):
+            raise FormError('outdated_fact')
+        record=record or {}
+        bindings={'employer':record.get('company'),'application_id':record.get('application_id')}
+        base={key:value for key,value in bindings.items() if isinstance(value,str) and value.strip()}
+        contexts=[]
+        for field in record.get('workflow',{}).get('form',[]):
+            if field.get('field_type')!='history':continue
+            declared=field.get('scope',{})
+            if not _valid_history_scope(declared) or any(key in bindings and bindings[key]!=value for key,value in declared.items()):
+                raise FormError('outdated_fact')
+            contexts.append({**base,**declared})
+        contexts=contexts or [base]
+        for item in (facts,source,*facts['entries']):
+            scope=item.get('scope',{})
+            if (not _valid_history_scope(scope)
+                    or any(any(context.get(key)!=value for key,value in scope.items()) for context in contexts)):
+                raise FormError('outdated_fact')
+        for field in ('review_due_at','valid_until'):
+            deadline=facts.get(field)
+            if field=='valid_until' and deadline is None:continue
+            if not isinstance(deadline,str) or not deadline.strip() or now>=timestamp(deadline):
+                raise FormError('outdated_fact')
+        return copy.deepcopy(facts)
+    except (OSError,ValueError,KeyError,TypeError,AttributeError):
+        raise FormError('outdated_fact') from None
+
+
 def layout_version(fields):
     return content_version(sorted([{'key':f['key'],**signature(f)} for f in fields],key=lambda f:f['key']))
 
