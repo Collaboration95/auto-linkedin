@@ -15,6 +15,7 @@
 !/docs/verification.md
 !/master-plan.md
 !/publication.json
+!/scripts/answer_import.py
 !/scripts/answers.py
 !/scripts/config.py
 !/scripts/context.py
@@ -28,6 +29,7 @@
 !/scripts/workspace.py
 !/tests/run-grouping.test.cjs
 !/tests/test_aliases.py
+!/tests/test_answer_import.py
 !/tests/test_answers.py
 !/tests/test_config.py
 !/tests/test_context.py

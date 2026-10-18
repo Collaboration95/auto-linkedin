@@ -42,5 +42,5 @@ def inbox(root,now):
     data=store(root);result=[]
     for q in data['questions']:
         resolved=resolve_question(root,q,now);answer=resolved['answer']
-        result.append({**q,'status':resolved['status'],'reason':resolved['reason'],'saved_value':answer['value'] if answer else None,'resolved_answer_id':answer['id'] if answer else None,'occurrences':[o for o in data['occurrences'] if o['question_id']==q['id']]})
+        result.append({**q,'question_version':content_version(signature(q)),'status':resolved['status'],'reason':resolved['reason'],'saved_value':answer['value'] if answer else None,'resolved_answer_id':answer['id'] if answer else None,'occurrences':[o for o in data['occurrences'] if o['question_id']==q['id']]})
     return sorted(result,key=lambda q:(q['status']=='resolved',q['id']))
