@@ -49,6 +49,7 @@ def begin_submit(root,identity,observed_url,claim,now,batch_id='manual',category
         if r.get('intent') and r['intent']['state'] in {'begun','confirmed'}:raise ValueError('reconciliation_required')
         w.preflight(root,r,now)
         intent={'attempt_id':uuid.uuid4().hex,'observed_job':r['canonical_listing_url'],'state':'begun','begun_at':now.isoformat(),'batch_id':batch_id,'category':category}
+        r.setdefault('attempts',[]).append(intent.copy())
         r.update(intent=intent,status='submission_uncertain',status_updated_at=now.isoformat())
         r.setdefault('events',[]).append({'at':now.isoformat(),'status':'submission_uncertain','reason':'submit_intent'})
         save(root,r)
@@ -67,6 +68,8 @@ def confirm(root,identity,attempt_id,evidence,now,occurred_at=None):
         directory.mkdir(parents=True,exist_ok=True);target=directory/'confirmation.txt';shutil.copyfile(evidence,target)
         sent={**r['prepared'],'attempt_id':attempt_id,'batch_id':intent['batch_id'],'category':intent['category'],'submitted_at':occurred,'occurred_at':occurred,'recorded_at':now.isoformat(),'confirmation_path':str(target.relative_to(root)),'confirmation_sha256':w.digest(target)}
         r['submissions'].append(sent);r['intent']['state']='confirmed'
+        for attempt in r.get('attempts',[]):
+            if attempt['attempt_id']==attempt_id:attempt['state']='confirmed'
         r.update(status='submitted',submitted_at=occurred,status_updated_at=now.isoformat())
         r['events'].append({'at':occurred,'occurred_at':occurred,'recorded_at':now.isoformat(),'status':'submitted'})
         save(root,r);return {'confirmed':True,'duplicate':False}
