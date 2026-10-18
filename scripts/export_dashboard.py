@@ -63,14 +63,18 @@ def export_dashboard(root=ROOT):
             "captured_at": record.get("captured_at"), "updated_at": record.get("status_updated_at"),
             "description": description.read_text() if description else "",
             "notes": record.get("notes", ""), "events": events, "submissions": submissions,
+            "record_url": "../" + source.relative_to(root).as_posix(),
+            "blocked_on_answer_ids": record.get("blocked_on_answer_ids", []),
             "prepared": {"at": prepared.get("prepared_at"), "resume": resume(prepared)} if prepared else None})
     applications.sort(key=lambda app: app.get("updated_at") or "", reverse=True)
     tz = configuration(root)["timezone"]
     generated_at = local_now(root).isoformat()
-    payload = {"timezone": tz, "generated_at": generated_at, "applications": applications}
+    from questions import inbox
+    from answers import store
+    payload = {"questions": inbox(root, local_now(root)), "answer_revision": store(root).get("revision", 0), "timezone": tz, "generated_at": generated_at, "applications": applications}
     assets = Path(__file__).resolve().parents[1] / "dashboard"
     (root / "dashboard").mkdir(parents=True, exist_ok=True)
-    for name in ("index.html", "app.js", "style.css", "runs.js"):
+    for name in ("index.html", "app.js", "style.css", "runs.js", "questions.js"):
         source = assets / name
         destination = root / "dashboard" / name
         if source.resolve() != destination.resolve():
