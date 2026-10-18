@@ -71,7 +71,7 @@ def export_dashboard(root=ROOT):
     generated_at = local_now(root).isoformat()
     from questions import inbox
     from answers import store
-    payload = {"questions": inbox(root, local_now(root)), "answer_revision": store(root).get("revision", 0), "timezone": tz, "generated_at": generated_at, "applications": applications}
+    payload = {"questions": inbox(root, local_now(root)), "answer_revision": store(root).get("revision", 0), "answer_import_ids": sorted(store(root).get("imports", {})), "timezone": tz, "generated_at": generated_at, "applications": applications}
     assets = Path(__file__).resolve().parents[1] / "dashboard"
     (root / "dashboard").mkdir(parents=True, exist_ok=True)
     for name in ("index.html", "app.js", "style.css", "runs.js", "questions.js"):

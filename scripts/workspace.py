@@ -50,7 +50,7 @@ def atomic_json(path, value):
     fd, temporary = tempfile.mkstemp(prefix=".write-", dir=path.parent)
     try:
         with os.fdopen(fd, "w") as stream:
-            json.dump(value, stream, indent=2, ensure_ascii=False)
+            json.dump(value, stream, indent=2, ensure_ascii=False, allow_nan=False)
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
@@ -371,6 +371,8 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("init")
     commands.add_parser("doctor")
+    changes = commands.add_parser("import-answers")
+    changes.add_argument("--file", type=Path, required=True)
     commands.add_parser("status")
     projects = commands.add_parser("projects")
     projects.add_argument("--id")
@@ -411,6 +413,12 @@ def main():
         return
     now = local_now(ROOT)
     try:
+        if args.command == "import-answers":
+            from answer_import import import_changes
+            result = import_changes(ROOT, read(args.file), now)
+            result["export"] = export_csv(ROOT)
+            print(json.dumps(result, indent=2))
+            return
         with writer(ROOT):
             if args.command == "status":
                 registry = read(ROOT / "resumes/registry.json")

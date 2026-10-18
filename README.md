@@ -9,3 +9,5 @@ Existing workspace layouts can be selected in place; no migration or deletion is
 Supported baseline: macOS, Python 3.10+ and Node 18+ for tests. Runtime uses Python stdlib and static HTML/CSS/JS. POSIX locking is also usable on Linux; Windows locking and live browsers are unsupported. PDF import optionally needs Poppler and PyMuPDF; routine commands do not.
 
 Set up with `python3 scripts/workspace.py --workspace /tmp/synthetic-workspace init`, then run the same command with `doctor`. For private use choose a persistent external directory. Doctor reports live browser support honestly and does not open or alter authenticated sessions.
+
+To answer questions: export the dashboard, edit the Questions view, click **Export answer changes**, then run `python3 scripts/workspace.py --workspace /tmp/synthetic-workspace import-answers --file /tmp/answer-changes.json`. Refresh the page to confirm persistence. Downloading alone does not save answers. Scope is shown with each answer; review authorization lasts 30 days in this UI.
