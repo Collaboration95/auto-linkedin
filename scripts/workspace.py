@@ -367,6 +367,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace", type=Path)
     commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("init")
+    commands.add_parser("doctor")
     commands.add_parser("status")
     projects = commands.add_parser("projects")
     projects.add_argument("--id")
@@ -400,6 +402,11 @@ def main():
     args = parser.parse_args()
     global ROOT
     ROOT = select_workspace(args.workspace)
+    from setup_workspace import initialize, doctor
+    if args.command in {"init", "doctor"}:
+        result = initialize(ROOT) if args.command == "init" else doctor(ROOT)
+        print(json.dumps(result, indent=2))
+        return
     now = local_now(ROOT)
     try:
         with writer(ROOT):

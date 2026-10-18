@@ -1,5 +1,6 @@
 """Deterministic scoped answers with immutable provenance and submit-time checks."""
 import copy
+import math
 from context import content_version
 from resolve_resume import timestamp
 
@@ -19,11 +20,13 @@ def validate(answer,question,now):
     if not answer.get('review_due_at'):raise ValueError('answer_review_required')
     for field in ('review_due_at','valid_until'):
         if answer.get(field) and now>=timestamp(answer[field]):raise ValueError('answer_expired')
+    if answer.get('semantic')!=question.get('semantic'):raise ValueError('answer_semantic_mismatch')
     a_scope=answer.get('scope',{});q_scope=question.get('scope',{})
     if not isinstance(a_scope,dict) or not isinstance(q_scope,dict):raise ValueError('answer_scope_invalid')
+    if question.get('semantic') in {'sponsorship','work_authorization','residency'} and (not a_scope.get('country') or a_scope.get('country') != q_scope.get('country')):
+        raise ValueError('legal_country_scope_required')
     if any(q_scope.get(k)!=v for k,v in a_scope.items()):raise ValueError('answer_scope_mismatch')
     # Legal concepts are explicit semantic keys, never inferred from similar wording.
-    if answer.get('semantic')!=question.get('semantic'):raise ValueError('answer_semantic_mismatch')
     if question.get('semantic')=='employer_consent' and (not a_scope.get('employer') or a_scope.get('employer')!=q_scope.get('employer')):
         raise ValueError('consent_scope_required')
     if answer.get('field_type','text')!=question.get('field_type','text') or answer.get('units')!=question.get('units'):
@@ -31,7 +34,7 @@ def validate(answer,question,now):
     value=answer['value'];kind=question.get('field_type','text')
     if kind not in {'text','select','number','boolean'}:raise ValueError('unsupported_answer_type')
     if kind=='text' and (not isinstance(value,str) or (question.get('required',True) and not value.strip())):raise ValueError('invalid_answer_value')
-    if kind=='number' and (type(value) not in (int,float)):raise ValueError('invalid_answer_value')
+    if kind=='number' and (type(value) not in (int,float) or not math.isfinite(value)):raise ValueError('invalid_answer_value')
     if kind=='boolean' and type(value) is not bool:raise ValueError('invalid_answer_value')
     if question.get('options') and value not in question['options']:raise ValueError('answer_option_mismatch')
     if kind=='select' and not question.get('options'):raise ValueError('answer_options_required')

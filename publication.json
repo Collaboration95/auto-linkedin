@@ -18,6 +18,7 @@
     "scripts/import_pdf.py",
     "scripts/publication.py",
     "scripts/resolve_resume.py",
+    "scripts/setup_workspace.py",
     "scripts/submission.py",
     "scripts/workspace.py",
     "tests/run-grouping.test.cjs",
@@ -26,6 +27,7 @@
     "tests/test_context.py",
     "tests/test_dashboard.py",
     "tests/test_publication.py",
+    "tests/test_setup.py",
     "tests/test_submission.py",
     "tests/test_workflow.py"
   ]
