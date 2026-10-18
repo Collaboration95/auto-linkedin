@@ -38,12 +38,9 @@ def register(root,application_id,form_key,field_key,spec,canonical_id=None):
 
 
 def inbox(root,now):
-    from answers import by_id,validate
+    from answers import resolve_question
     data=store(root);result=[]
     for q in data['questions']:
-        reason='unknown_answer';answer=None
-        try:
-            answer=validate(by_id(root,q['answer_id']),q,now);reason=None
-        except (ValueError,KeyError):pass
-        result.append({**q,'status':'resolved' if reason is None else 'unresolved','reason':reason,'saved_value':answer['value'] if reason is None else None,'occurrences':[o for o in data['occurrences'] if o['question_id']==q['id']]})
+        resolved=resolve_question(root,q,now);answer=resolved['answer']
+        result.append({**q,'status':resolved['status'],'reason':resolved['reason'],'saved_value':answer['value'] if answer else None,'resolved_answer_id':answer['id'] if answer else None,'occurrences':[o for o in data['occurrences'] if o['question_id']==q['id']]})
     return sorted(result,key=lambda q:(q['status']=='resolved',q['id']))

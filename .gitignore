@@ -27,6 +27,7 @@
 !/scripts/submission.py
 !/scripts/workspace.py
 !/tests/run-grouping.test.cjs
+!/tests/test_aliases.py
 !/tests/test_answers.py
 !/tests/test_config.py
 !/tests/test_context.py

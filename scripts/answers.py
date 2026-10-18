@@ -68,3 +68,22 @@ def revalidate(root,items,now):
         if content_version(answer)!=item.get('source_version'):raise ValueError('answer_changed_after_preparation')
         validate(answer,item['question_spec'],now)
         if answer['value']!=item['answer']:raise ValueError('answer_changed_after_preparation')
+
+
+def resolve_question(root,question,now):
+    """Only approved exact normalized aliases; ambiguity remains unresolved."""
+    from questions import normalize
+    data=store(root);bound=data.get('bindings',{}).get(question.get('id')) or question.get('answer_id')
+    candidates=[]
+    for answer in data['answers']:
+        explicit=answer['id']==bound
+        aliases=answer.get('aliases',[])
+        if not explicit and normalize(question['text']) not in [normalize(t) for t in aliases]:continue
+        if answer.get('options',[])!=question.get('options',[]):continue
+        try:validated=validate(answer,question,now)
+        except ValueError:continue
+        candidates.append((0 if explicit else 2 if answer['source']['kind']=='authorized_default' else 1,validated))
+    if not candidates:return {'status':'unresolved','reason':'unknown_or_invalid_answer','answer':None}
+    best=min(rank for rank,_ in candidates);winners=[a for rank,a in candidates if rank==best]
+    if len(winners)!=1:return {'status':'unresolved','reason':'ambiguous_alias','answer':None}
+    return {'status':'resolved','reason':None,'answer':winners[0]}
