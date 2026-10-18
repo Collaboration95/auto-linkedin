@@ -379,6 +379,10 @@ def main():
     run_command.add_argument("--quota", type=int, default=1)
     run_command.add_argument("--max-steps", type=int, default=10)
     run_command.add_argument("--deadline", help="Offset-aware deadline for a new batch")
+    resume_command = commands.add_parser("resume")
+    resume_command.add_argument("--id")
+    metrics_command = commands.add_parser("metrics")
+    metrics_command.add_argument("--batch")
     commands.add_parser("status")
     projects = commands.add_parser("projects")
     projects.add_argument("--id")
@@ -420,6 +424,14 @@ def main():
         return
     now = local_now(ROOT)
     try:
+        if args.command == "resume":
+            from stops import acknowledge_resume
+            print(json.dumps(acknowledge_resume(ROOT, now, args.id), indent=2))
+            return
+        if args.command == "metrics":
+            from metrics import summary
+            print(json.dumps(summary(ROOT, args.batch), indent=2))
+            return
         if args.command == "run":
             from runner import run, SyntheticAdapter, UnsupportedAdapter
             adapter = SyntheticAdapter(read(args.catalog)) if args.catalog else UnsupportedAdapter()

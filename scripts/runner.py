@@ -208,9 +208,11 @@ def execute(root,batch,action,adapter,claim,now,clock=None):
         submission.confirm(root,identity,intent['attempt_id'],evidence,clock(),confirmation.get('occurred_at'))
 
 
-def run(root,batch_id,adapter,quota=1,max_steps=10,clock=None,deadline=None):
+def run(root,batch_id,adapter,quota=1,max_steps=10,clock=None,deadline=None,timer=None):
     import workspace as w
     if type(max_steps) is not int or max_steps<0:raise ValueError('invalid_step_budget')
+    import time
+    timer=timer or time.perf_counter
     clock=clock or (lambda:local_now(root));batch=initialize_batch(root,batch_id,quota,clock(),deadline);last={'action':'stop','reason':'step_budget'}
     if hasattr(adapter,'bind_workspace'):adapter.bind_workspace(root)
     with submission.browser_claim(root) as claim:
@@ -223,9 +225,10 @@ def run(root,batch_id,adapter,quota=1,max_steps=10,clock=None,deadline=None):
             recompute(root,now);last=next_action(root,batch,now)
             if last['action']=='stop':break
             batch['checkpoint']={**last,'phase':'started','at':now.isoformat()};w.atomic_json(batch_path(root,batch_id),batch)
+            stage_start=timer();stage_retry=0
             try:execute(root,batch,last,adapter,claim,now,clock)
             except AdapterError as exc:
-                if exc.reason in {'timeout','throttled'}:batch['retries']+=1
+                if exc.reason in {'timeout','throttled'}:batch['retries']+=1;stage_retry=1
                 if last.get('application_id'):record_stop(root,last['application_id'],exc.reason,now,batch['budgets']['max_retries'])
                 else:
                     w.atomic_json(root/'runtime/browser-stop.json',{'reason':exc.reason,'at':now.isoformat(),'requires_resume':True})
@@ -235,6 +238,12 @@ def run(root,batch_id,adapter,quota=1,max_steps=10,clock=None,deadline=None):
             except KeyboardInterrupt:
                 batch['checkpoint']={**last,'phase':'interrupted','at':clock().isoformat()};w.atomic_json(batch_path(root,batch_id),batch)
                 last={'action':'stop','reason':'interrupted'};break
+            from metrics import record_stage
+            reused=0
+            if last['action']=='prepare':
+                prepared=submission.load(root,last['application_id']).get('prepared')
+                if prepared:reused=len(w.read(private_path(root,prepared['answers_path'])))
+            record_stage(root,batch_id,last['action'],max(0,timer()-stage_start),stage_retry,reused,adapter.measured_usage() if hasattr(adapter,'measured_usage') else None)
             batch['steps']+=1;batch['checkpoint']={**last,'phase':'verified','at':now.isoformat()};w.atomic_json(batch_path(root,batch_id),batch)
         else:last={'action':'stop','reason':'step_budget'}
     capacity=submit_capacity(w.records(root),batch_id,quota)
