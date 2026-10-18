@@ -305,7 +305,7 @@ def event(root, args, now):
         target = attempt / Path(resume["path"]).name
         shutil.copy2(resume["path"], target)
         atomic_json(attempt / "answers.json", answers)
-        record["prepared"] = {**resume, "prepared_at": now.isoformat(),
+        record["prepared"] = {**resume, "path": str(Path(resume["path"]).relative_to(root.resolve())), "prepared_at": now.isoformat(),
                               "exact_resume_copy": str(target.relative_to(root)),
                               "answers_path": str((attempt / "answers.json").relative_to(root)),
                               "answers_sha256": digest(attempt / "answers.json"),
